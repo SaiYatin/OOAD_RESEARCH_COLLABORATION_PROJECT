@@ -1,0 +1,166 @@
+{
+  "name": "Search Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a38a6cca-0ecb-43a3-beed-360475e506b3",
+      "name": "When chat message received",
+      "webhookId": "fb5f20a6-188b-42b1-aedf-a560376d262a"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "19qb2aQdVzDKpqP3kgn19cfyLGJEISkprq7gEIPdTOQ8",
+          "mode": "list",
+          "cachedResultName": "University Research Agent",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19qb2aQdVzDKpqP3kgn19cfyLGJEISkprq7gEIPdTOQ8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19qb2aQdVzDKpqP3kgn19cfyLGJEISkprq7gEIPdTOQ8/edit#gid=0"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRange"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        240,
+        96
+      ],
+      "id": "cd9e1180-1b2e-4fc0-bae5-6d05f2b9acc3",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uLkoRcSXnFFQKpVq",
+          "name": "google sheet trial 1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=User question:\n{{ $('When chat message received').first().json.chatInput }}\n\nProfessor data:\n{{ JSON.stringify($('Code in JavaScript').first().json.professors) }}\n\nFind professors whose research matches the query.\n\nReturn name, email and research.",
+        "options": {
+          "systemMessage": ""
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        656,
+        0
+      ],
+      "id": "1cd12d26-e34a-4964-af62-dc0cdea465ae",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        520,
+        224
+      ],
+      "id": "2f96c4f5-c743-40f6-b534-f36673aafe2e",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "SMFiKtBEc11jsDuI",
+          "name": "university research agent - test api 1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const professors = $input.all().map(item => item.json);\n\nreturn [\n{\njson: {\nprofessors: professors\n}\n}\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        80
+      ],
+      "id": "57f177a3-3575-49a1-b943-d26189f27044",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "94398667-06e7-4de5-a3ca-e5d6d1490497",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5d4eda9198d3537f46aa9a921d817e78d86a93076a29f00ba169dfc37ff72e1e"
+  },
+  "id": "_3ztX1VtvgFrF7yD8jYUD",
+  "tags": []
+}

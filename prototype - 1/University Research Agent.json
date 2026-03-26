@@ -1,0 +1,404 @@
+{
+  "name": "University Research Agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "4fca215c-41c0-48c3-9059-bb83e97b1a75",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7fe0eff4-0acf-4fec-ba4a-3fe8430d3cc3",
+              "name": "pages",
+              "value": 1,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "8324bf59-7a3a-4838-835a-5f5ac7f4ab65",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "url": "=https://staff.pes.edu/atoz/?page={{$json.pages}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "08287c7f-bd2b-443e-92c4-9ab5d1080176",
+      "name": "Get Staff Page",
+      "alwaysOutputData": false,
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "profile_links",
+              "cssSelector": "a[href^=\"/nm\"]",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "22171726-db54-4b68-b6ac-a2384be433eb",
+      "name": "Extract Staff Links"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "profile_links",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        832,
+        0
+      ],
+      "id": "87af78d3-4c19-411e-91ed-6fe508eb5224",
+      "name": "Split Professor Links"
+    },
+    {
+      "parameters": {
+        "url": "=https://staff.pes.edu{{$json.profile_links}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1248,
+        0
+      ],
+      "id": "15f1fd01-e2cb-474a-87c2-5e1f37ebd747",
+      "name": "Get Professor Page"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "name",
+              "cssSelector": ".agent_card-title h4"
+            },
+            {
+              "key": "designation",
+              "cssSelector": ".list-single-stats li span"
+            },
+            {
+              "key": "Mail",
+              "cssSelector": "a[href^=\"mailto\"]"
+            },
+            {
+              "key": "Phone",
+              "cssSelector": "a[href^=\"tel\"]"
+            },
+            {
+              "key": "research",
+              "cssSelector": "#tab-research .ul-item-left li p",
+              "returnArray": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        1456,
+        0
+      ],
+      "id": "d306ec66-5818-41e9-8f0f-f9b72d788458",
+      "name": "Extract Professor Data"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        64
+      ],
+      "id": "c9e6ddce-5c5b-4328-b590-7f700c3df121",
+      "name": "Remove Duplicates"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "19qb2aQdVzDKpqP3kgn19cfyLGJEISkprq7gEIPdTOQ8",
+          "mode": "list",
+          "cachedResultName": "University Research Agent",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19qb2aQdVzDKpqP3kgn19cfyLGJEISkprq7gEIPdTOQ8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19qb2aQdVzDKpqP3kgn19cfyLGJEISkprq7gEIPdTOQ8/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "name": "={{ $json.name }}",
+            "designation": "={{ $json.designation }}",
+            "Mail": "={{ $json.Mail }}",
+            "Phone": "={{ $json.Phone }}",
+            "research": "={{ $json.research }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "designation",
+              "displayName": "designation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Mail",
+              "displayName": "Mail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "research",
+              "displayName": "research",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1872,
+        48
+      ],
+      "id": "f29e659e-1abf-4ede-b95b-00e2bf883294",
+      "name": "Append or update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uLkoRcSXnFFQKpVq",
+          "name": "google sheet trial 1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n\n  let research = item.json.research;\n\n  if (!research || research.length === 0) {\n    research = \"Not listed\";\n  } else {\n    research = research.join(\", \");\n  }\n\n  return {\n    json: {\n      name: item.json.name,\n      designation: item.json.designation,\n      Mail: item.json.Mail,\n      Phone: item.json.Phone,\n      research: research\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        0
+      ],
+      "id": "e666a3b8-9222-4a03-b506-35532dbaf5a4",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Get Staff Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Staff Page": {
+      "main": [
+        [
+          {
+            "node": "Extract Staff Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Staff Links": {
+      "main": [
+        [
+          {
+            "node": "Split Professor Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Professor Links": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Professor Page": {
+      "main": [
+        [
+          {
+            "node": "Extract Professor Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Get Professor Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Professor Data": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "29453052-707a-4c0a-b042-f0baac0b036d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5d4eda9198d3537f46aa9a921d817e78d86a93076a29f00ba169dfc37ff72e1e"
+  },
+  "id": "2nKeydCOgyN18YjUIjKNO",
+  "tags": []
+}

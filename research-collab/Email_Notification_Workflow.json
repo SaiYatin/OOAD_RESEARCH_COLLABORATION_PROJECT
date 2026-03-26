@@ -1,0 +1,121 @@
+{
+  "name": "Research Email Notification Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "research-update",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "webhook-trigger",
+      "name": "Webhook: New Paper Published",
+      "webhookId": "research-update-hook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract payload from Java app webhook call\nconst body = $input.first().json.body || $input.first().json;\n\nconst recipientEmail = body.recipientEmail || '';\nconst paperTitle     = body.paperTitle     || 'New Research Paper';\nconst paperDomain    = body.paperDomain    || 'Research';\nconst matchedKeyword = body.matchedKeyword || '';\nconst paperLink      = body.paperLink      || '';\nconst author         = body.author         || 'Unknown';\n\nif (!recipientEmail) {\n  throw new Error('No recipient email in payload');\n}\n\nreturn [{\n  json: {\n    recipientEmail,\n    paperTitle,\n    paperDomain,\n    matchedKeyword,\n    paperLink,\n    author,\n    subject: `[ResearchConnect] New paper in \"${matchedKeyword}\" — ${paperTitle}`,\n    htmlBody: `\n      <div style=\"font-family: Georgia, serif; max-width: 600px; margin: 0 auto; background: #0f1117; color: #e2e8f0; padding: 32px; border-radius: 12px;\">\n        <div style=\"border-bottom: 2px solid #6c9bff; padding-bottom: 16px; margin-bottom: 24px;\">\n          <h1 style=\"color: #6c9bff; font-size: 24px; margin: 0;\">ResearchConnect</h1>\n          <p style=\"color: #8892a4; margin: 4px 0 0;\">Research Collaboration & Expert Recommendation</p>\n        </div>\n        \n        <h2 style=\"color: #e2e8f0; font-size: 20px;\">📄 New paper matches your followed keyword</h2>\n        \n        <div style=\"background: #1a1f2e; border-radius: 10px; padding: 20px; margin: 20px 0; border-left: 4px solid #6c9bff;\">\n          <p style=\"color: #8892a4; font-size: 12px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 1px;\">Matched Keyword</p>\n          <p style=\"color: #6c9bff; font-size: 16px; font-weight: bold; margin: 0;\">${matchedKeyword}</p>\n        </div>\n\n        <div style=\"background: #1a1f2e; border-radius: 10px; padding: 20px; margin: 20px 0;\">\n          <h3 style=\"color: #e2e8f0; margin: 0 0 12px;\">${paperTitle}</h3>\n          <p style=\"color: #8892a4; margin: 4px 0;\"><strong style=\"color: #a0aec0;\">Author:</strong> ${author}</p>\n          <p style=\"color: #8892a4; margin: 4px 0;\"><strong style=\"color: #a0aec0;\">Domain:</strong> ${paperDomain}</p>\n          ${paperLink ? `<p style=\"margin: 12px 0 0;\"><a href=\"${paperLink}\" style=\"background: #6c9bff; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: bold;\">View Paper →</a></p>` : ''}\n        </div>\n\n        <p style=\"color: #4a5568; font-size: 12px; margin-top: 32px; border-top: 1px solid #2d3748; padding-top: 16px;\">\n          You received this because you follow \"${matchedKeyword}\" in ResearchConnect.<br>\n          Manage your notifications in the app under Collaborations → Following.\n        </p>\n      </div>\n    `\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "id": "build-email-payload",
+      "name": "Build Email Payload"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SENDER_EMAIL }}",
+        "toEmail": "={{ $json.recipientEmail }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "html": "={{ $json.htmlBody }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [480, 0],
+      "id": "send-email",
+      "name": "Send Notification Email",
+      "credentials": {
+        "smtp": {
+          "id": "smtp-credentials",
+          "name": "Gmail SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [720, 0],
+      "id": "respond-ok",
+      "name": "Respond 200 OK"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "19qb2aQdVzDKpqP3kgn19cfyLGJEISkprq7gEIPdTOQ8",
+          "mode": "list",
+          "cachedResultName": "University Research Agent"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "research",
+              "lookupValue": "={{ $('Build Email Payload').first().json.matchedKeyword }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [480, 200],
+      "id": "lookup-matching-experts",
+      "name": "Lookup Matching Experts in Sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uLkoRcSXnFFQKpVq",
+          "name": "google sheet trial 1"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: New Paper Published": {
+      "main": [[{ "node": "Build Email Payload", "type": "main", "index": 0 }]]
+    },
+    "Build Email Payload": {
+      "main": [
+        [
+          { "node": "Send Notification Email", "type": "main", "index": 0 },
+          { "node": "Lookup Matching Experts in Sheet", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Notification Email": {
+      "main": [[{ "node": "Respond 200 OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "5d4eda9198d3537f46aa9a921d817e78d86a93076a29f00ba169dfc37ff72e1e"
+  },
+  "id": "email-notification-workflow",
+  "tags": []
+}
