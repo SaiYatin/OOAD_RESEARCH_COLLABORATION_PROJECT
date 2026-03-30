@@ -14,9 +14,17 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.*;
-import org.springframework.stereotype.Component;
+import main.java.com.research.service.PaperService;
 
+import org.springframework.stereotype.Component;
+import org.w3c.dom.Text;
+
+import java.lang.classfile.Label;
 import java.util.List;
+
+import javax.swing.table.TableColumn;
+import javax.swing.text.TableView;
+import javax.swing.text.TableView.TableRow;
 
 /**
  * PaperSearchView - Member 1's primary UI.
@@ -32,9 +40,10 @@ public class PaperSearchView {
     private final PublishedOnlyDecorator publishedDecorator;
 
     public PaperSearchView(ResearchPaperRepository paperRepository,
-                           BasicPaperSearch basicSearch,
-                           DomainFilterDecorator domainDecorator,
-                           PublishedOnlyDecorator publishedDecorator) {
+                       BasicPaperSearch basicSearch,
+                       DomainFilterDecorator domainDecorator,
+                       PublishedOnlyDecorator publishedDecorator,
+                       PaperService paperService) {
         this.paperRepository = paperRepository;
         this.basicSearch = basicSearch;
         this.domainDecorator = domainDecorator;
