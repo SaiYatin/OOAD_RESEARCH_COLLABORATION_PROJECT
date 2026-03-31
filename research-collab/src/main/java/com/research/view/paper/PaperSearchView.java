@@ -1,10 +1,14 @@
 package com.research.view.paper;
 
 import com.research.model.ResearchPaper;
+import com.research.model.Researcher;
+import com.research.model.User;
 import com.research.pattern.BasicPaperSearch;
 import com.research.pattern.DomainFilterDecorator;
 import com.research.pattern.PublishedOnlyDecorator;
 import com.research.repository.ResearchPaperRepository;
+import com.research.service.AuthService;
+import com.research.service.PaperService;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -14,220 +18,447 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.*;
-import main.java.com.research.service.PaperService;
-
 import org.springframework.stereotype.Component;
-import org.w3c.dom.Text;
 
-import java.lang.classfile.Label;
 import java.util.List;
 
-import javax.swing.table.TableColumn;
-import javax.swing.text.TableView;
-import javax.swing.text.TableView.TableRow;
-
 /**
- * PaperSearchView - Member 1's primary UI.
- * Uses the Decorator pattern to apply optional filters on paper search.
- * MVC: View layer — delegates search to pattern classes.
+ * PaperSearchView — Member 1's complete view.
+ *
+ * Tabs:
+ *   1. Search All  — keyword search + Decorator chain (Published / Domain filters)
+ *   2. Upload Paper — title/author/domain/keywords/abstract form → DRAFT → submit
+ *   3. My Papers   — table of own papers, submit / publish / delete actions
+ *
+ * Design Pattern demonstrated: Decorator (search filter chain shown live in UI)
+ * Design Principle: SRP (each tab one responsibility), DIP (uses PaperService)
  */
 @Component
 public class PaperSearchView {
 
     private final ResearchPaperRepository paperRepository;
-    private final BasicPaperSearch basicSearch;
-    private final DomainFilterDecorator domainDecorator;
-    private final PublishedOnlyDecorator publishedDecorator;
+    private final BasicPaperSearch        basicSearch;
+    private final DomainFilterDecorator   domainDecorator;
+    private final PublishedOnlyDecorator  publishedDecorator;
+    private final PaperService            paperService;   // ← field properly declared
 
     public PaperSearchView(ResearchPaperRepository paperRepository,
-                       BasicPaperSearch basicSearch,
-                       DomainFilterDecorator domainDecorator,
-                       PublishedOnlyDecorator publishedDecorator,
-                       PaperService paperService) {
-        this.paperRepository = paperRepository;
-        this.basicSearch = basicSearch;
-        this.domainDecorator = domainDecorator;
+                           BasicPaperSearch basicSearch,
+                           DomainFilterDecorator domainDecorator,
+                           PublishedOnlyDecorator publishedDecorator,
+                           PaperService paperService) {
+        this.paperRepository    = paperRepository;
+        this.basicSearch        = basicSearch;
+        this.domainDecorator    = domainDecorator;
         this.publishedDecorator = publishedDecorator;
+        this.paperService       = paperService;          // ← properly assigned
     }
 
+    // ── Top-level panel ───────────────────────────────────────────────
     public VBox buildPanel() {
-        VBox panel = new VBox(20);
-        panel.setStyle("-fx-background-color: #0f1117;");
+        VBox panel = new VBox(0);
+        panel.setStyle("-fx-background-color:#0f1117;");
 
-        // ── Header ────────────────────────────────────────────────────
-        Text title = new Text("Research Paper Search");
+        // Page header
+        VBox header = new VBox(4);
+        header.setPadding(new Insets(0, 0, 16, 0));
+        Text title = new Text("Research Papers");
         title.setFont(Font.font("Georgia", FontWeight.BOLD, 26));
         title.setFill(Color.web("#e2e8f0"));
-
-        Text subtitle = new Text("Search papers by title, abstract or keywords");
+        Text subtitle = new Text("Search the database · Upload your work · Manage your papers");
         subtitle.setFont(Font.font("System", 13));
         subtitle.setFill(Color.web("#8892a4"));
+        header.getChildren().addAll(title, subtitle);
 
-        // ── Search Bar ────────────────────────────────────────────────
+        // Tab strip
+        ToggleGroup tabGroup = new ToggleGroup();
+        ToggleButton searchTab   = tabBtn("🔍  Search All",   tabGroup, true);
+        ToggleButton uploadTab   = tabBtn("📤  Upload Paper", tabGroup, false);
+        ToggleButton myPapersTab = tabBtn("📁  My Papers",    tabGroup, false);
+        HBox tabRow = new HBox(4, searchTab, uploadTab, myPapersTab);
+        tabRow.setPadding(new Insets(0, 0, 16, 0));
+
+        StackPane content = new StackPane();
+        VBox.setVgrow(content, Priority.ALWAYS);
+        content.getChildren().add(buildSearchPane());
+
+        tabGroup.selectedToggleProperty().addListener((obs, o, n) -> {
+            content.getChildren().clear();
+            if      (n == searchTab)   content.getChildren().add(buildSearchPane());
+            else if (n == uploadTab)   content.getChildren().add(buildUploadPane());
+            else if (n == myPapersTab) content.getChildren().add(buildMyPapersPane());
+        });
+
+        panel.getChildren().addAll(header, tabRow, content);
+        return panel;
+    }
+
+    // ══ TAB 1 — Search All (Decorator pattern) ════════════════════════
+    private VBox buildSearchPane() {
+        VBox pane = new VBox(14);
+
+        // Search bar
         HBox searchRow = new HBox(12);
         searchRow.setAlignment(Pos.CENTER_LEFT);
-
         TextField searchField = new TextField();
-        searchField.setPromptText("Search: 'machine learning', 'NLP', 'composite materials'...");
-        searchField.setStyle(
-            "-fx-background-color: #1a1f2e; -fx-text-fill: #e2e8f0; " +
-            "-fx-prompt-text-fill: #4a5568; -fx-border-color: #2d3748; " +
-            "-fx-border-radius: 6px; -fx-background-radius: 6px; " +
-            "-fx-pref-height: 42px; -fx-font-size: 13px; -fx-padding: 0 12px;");
+        searchField.setPromptText("Search by title, abstract, keywords…");
+        searchField.setStyle(fieldStyle());
         HBox.setHgrow(searchField, Priority.ALWAYS);
-
-        Button searchBtn = primaryButton("Search");
-
+        Button searchBtn = primaryBtn("Search");
         searchRow.getChildren().addAll(searchField, searchBtn);
 
-        // ── Filters (Decorator pattern controls) ──────────────────────
+        // Decorator filter controls
         HBox filterRow = new HBox(16);
         filterRow.setAlignment(Pos.CENTER_LEFT);
+        Label filterLbl = new Label("Filters:");
+        filterLbl.setFont(Font.font("System", FontWeight.BOLD, 12));
+        filterLbl.setTextFill(Color.web("#6c9bff"));
 
-        Label filterLabel = new Label("Filters:");
-        filterLabel.setFont(Font.font("System", FontWeight.BOLD, 12));
-        filterLabel.setTextFill(Color.web("#8892a4"));
-
-        CheckBox publishedOnly = new CheckBox("Published Only");
-        styleCheckBox(publishedOnly);
+        CheckBox publishedCb = new CheckBox("Published Only");
+        publishedCb.setStyle("-fx-text-fill:#a0aec0;-fx-font-size:12px;");
 
         TextField domainField = new TextField();
-        domainField.setPromptText("Domain filter (e.g. AI)");
-        domainField.setStyle(
-            "-fx-background-color: #1a1f2e; -fx-text-fill: #e2e8f0; " +
-            "-fx-prompt-text-fill: #4a5568; -fx-border-color: #2d3748; " +
-            "-fx-border-radius: 6px; -fx-background-radius: 6px; " +
-            "-fx-pref-height: 34px; -fx-pref-width: 200px; -fx-font-size: 12px;");
+        domainField.setPromptText("Domain filter");
+        domainField.setStyle(fieldStyle() + "-fx-pref-width:200px;-fx-pref-height:34px;");
 
-        filterRow.getChildren().addAll(filterLabel, publishedOnly, domainField);
+        // Live decorator chain label — shows the pattern in action
+        Label chainLbl = new Label("Decorator chain: BasicSearch");
+        chainLbl.setFont(Font.font("Courier New", 10));
+        chainLbl.setTextFill(Color.web("#4a5568"));
 
-        // ── Results Table ─────────────────────────────────────────────
-        TableView<ResearchPaper> table = buildPaperTable();
+        Runnable updateChain = () -> {
+            String c = "BasicSearch";
+            if (publishedCb.isSelected())        c += " → PublishedOnly";
+            if (!domainField.getText().isBlank()) c += " → DomainFilter";
+            chainLbl.setText("Decorator chain: " + c);
+        };
+        publishedCb.setOnAction(e -> updateChain.run());
+        domainField.textProperty().addListener((o, ov, nv) -> updateChain.run());
+        filterRow.getChildren().addAll(filterLbl, publishedCb, domainField, chainLbl);
+
+        Label countLbl = new Label("");
+        countLbl.setFont(Font.font("System", 12));
+        countLbl.setTextFill(Color.web("#4a5568"));
+
+        TableView<ResearchPaper> table = buildTable(false);
         ObservableList<ResearchPaper> data = FXCollections.observableArrayList();
         table.setItems(data);
 
-        Label resultCount = new Label("0 results");
-        resultCount.setFont(Font.font("System", 12));
-        resultCount.setTextFill(Color.web("#4a5568"));
+        // Load all on open
+        List<ResearchPaper> all = paperRepository.findAll();
+        data.setAll(all);
+        countLbl.setText(all.size() + " papers in database");
 
-        // ── Search action: applies Decorator chain ─────────────────────
         Runnable doSearch = () -> {
-            String query = searchField.getText().trim();
-            List<ResearchPaper> allPapers = paperRepository.findAll();
+            String q      = searchField.getText().trim();
+            List<ResearchPaper> papers = paperRepository.findAll();
+            List<ResearchPaper> result;
 
-            // Build decorator chain based on selected filters
-            // Pattern: BasicSearch → [PublishedOnly?] → [DomainFilter?]
-            var searchChain = basicSearch;
-            List<ResearchPaper> results;
-
-            if (publishedOnly.isSelected() && !domainField.getText().isBlank()) {
-                // Both filters applied
-                results = domainDecorator
-                    .withDomain(domainField.getText().trim())
-                    .search(query,
-                        publishedDecorator.search(query, allPapers));
-            } else if (publishedOnly.isSelected()) {
-                results = publishedDecorator.search(query, allPapers);
+            if (publishedCb.isSelected() && !domainField.getText().isBlank()) {
+                result = domainDecorator.withDomain(domainField.getText().trim())
+                         .search(q, publishedDecorator.search(q, papers));
+            } else if (publishedCb.isSelected()) {
+                result = publishedDecorator.search(q, papers);
             } else if (!domainField.getText().isBlank()) {
-                results = domainDecorator
-                    .withDomain(domainField.getText().trim())
-                    .search(query, allPapers);
+                result = domainDecorator.withDomain(domainField.getText().trim())
+                         .search(q, papers);
             } else {
-                results = searchChain.search(query, allPapers);
+                result = basicSearch.search(q, papers);
             }
 
-            data.setAll(results);
-            resultCount.setText(results.size() + " result(s) found");
+            data.setAll(result);
+            countLbl.setText(result.size() + " result(s) — " + chainLbl.getText());
         };
 
         searchBtn.setOnAction(e -> doSearch.run());
         searchField.setOnAction(e -> doSearch.run());
 
-        // Load all papers on open
-        data.setAll(paperRepository.findAll());
-        resultCount.setText(data.size() + " papers available");
-
-        panel.getChildren().addAll(title, subtitle, searchRow, filterRow,
-                                    resultCount, table);
-        return panel;
+        pane.getChildren().addAll(searchRow, filterRow, countLbl, table);
+        return pane;
     }
 
-    @SuppressWarnings("unchecked")
-    private TableView<ResearchPaper> buildPaperTable() {
-        TableView<ResearchPaper> table = new TableView<>();
-        table.setStyle(
-            "-fx-background-color: #1a1f2e; -fx-border-color: #2d3748; " +
-            "-fx-border-radius: 8px; -fx-background-radius: 8px;");
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        VBox.setVgrow(table, Priority.ALWAYS);
-        table.setPlaceholder(new Label("No papers found. Try a different search."));
+    // ══ TAB 2 — Upload Paper ══════════════════════════════════════════
+    private VBox buildUploadPane() {
+        VBox pane = new VBox(10);
+        pane.setMaxWidth(600);
 
-        TableColumn<ResearchPaper, String> titleCol = new TableColumn<>("Title");
-        titleCol.setCellValueFactory(new PropertyValueFactory<>("title"));
-        titleCol.setPrefWidth(300);
+        Text heading = new Text("Upload Research Paper");
+        heading.setFont(Font.font("Georgia", FontWeight.BOLD, 20));
+        heading.setFill(Color.web("#e2e8f0"));
 
-        TableColumn<ResearchPaper, String> authorCol = new TableColumn<>("Author");
-        authorCol.setCellValueFactory(new PropertyValueFactory<>("author"));
-        authorCol.setPrefWidth(160);
+        TextField titleField    = formField("Paper Title *");
+        TextField authorField   = formField("Author(s) *");
+        TextField domainField   = formField("Domain  (e.g. Artificial Intelligence)");
+        TextField keywordsField = formField("Keywords — comma-separated");
+        TextField linkField     = formField("Paper URL / DOI  (optional)");
 
-        TableColumn<ResearchPaper, String> domainCol = new TableColumn<>("Domain");
-        domainCol.setCellValueFactory(new PropertyValueFactory<>("domain"));
-        domainCol.setPrefWidth(160);
+        TextArea abstractArea = new TextArea();
+        abstractArea.setPromptText("Abstract — brief summary of the paper");
+        abstractArea.setPrefRowCount(4);
+        abstractArea.setWrapText(true);
+        abstractArea.setStyle(fieldStyle() + "-fx-pref-height:90px;");
 
-        TableColumn<ResearchPaper, String> statusCol = new TableColumn<>("Status");
-        statusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
-        statusCol.setPrefWidth(110);
+        Button saveBtn   = primaryBtn("Save as Draft");
+        Button submitBtn = new Button("Submit for Review");
+        submitBtn.setStyle(secondaryBtnStyle());
+        submitBtn.setDisable(true);
+        HBox btnRow = new HBox(12, saveBtn, submitBtn);
 
-        TableColumn<ResearchPaper, String> dateCol = new TableColumn<>("Uploaded");
-        dateCol.setCellValueFactory(new PropertyValueFactory<>("uploadedAt"));
-        dateCol.setPrefWidth(130);
+        Label statusLbl = new Label("");
+        statusLbl.setWrapText(true);
+        statusLbl.setFont(Font.font("System", 12));
 
-        // Style column headers
-        for (TableColumn<?, ?> col : List.of(titleCol, authorCol, domainCol, statusCol, dateCol)) {
-            col.setStyle("-fx-background-color: #0f1117; -fx-text-fill: #8892a4; " +
-                         "-fx-font-weight: bold; -fx-font-size: 12px;");
+        final Long[] lastId = {null};
+
+        saveBtn.setOnAction(e -> {
+            String t = titleField.getText().trim();
+            String a = authorField.getText().trim();
+            if (t.isBlank() || a.isBlank()) {
+                status(statusLbl, "Title and Author are required.", false);
+                return;
+            }
+            User cu = AuthService.getCurrentUser();
+            if (!(cu instanceof Researcher researcher)) {
+                status(statusLbl, "Only Researcher accounts can upload papers.", false);
+                return;
+            }
+            ResearchPaper p = new ResearchPaper();
+            p.setTitle(t);
+            p.setAuthor(a);
+            p.setDomain(domainField.getText().trim());
+            p.setKeywords(keywordsField.getText().trim());
+            p.setLink(linkField.getText().trim());
+            p.setAbstractText(abstractArea.getText().trim());
+
+            ResearchPaper saved = paperService.uploadPaper(p, researcher);
+            lastId[0] = saved.getPaperId();
+            status(statusLbl, "✓ Saved as DRAFT (ID " + saved.getPaperId()
+                   + "). Now submit it for review.", true);
+            submitBtn.setDisable(false);
+        });
+
+        submitBtn.setOnAction(e -> {
+            if (lastId[0] == null) { status(statusLbl, "Save paper first.", false); return; }
+            try {
+                paperService.submitForReview(lastId[0]);
+                status(statusLbl, "✓ Submitted for review! Status: SUBMITTED.", true);
+                submitBtn.setDisable(true);
+            } catch (Exception ex) {
+                status(statusLbl, ex.getMessage(), false);
+            }
+        });
+
+        Label note = new Label(
+            "ℹ  Publishing a paper triggers the Observer pattern → " +
+            "n8n Workflow 3 emails users following matching keywords.");
+        note.setWrapText(true);
+        note.setFont(Font.font("System", FontPosture.ITALIC, 11));
+        note.setTextFill(Color.web("#4a5568"));
+
+        pane.getChildren().addAll(
+            heading,
+            lbl("Title *"),     titleField,
+            lbl("Author(s) *"), authorField,
+            lbl("Domain"),      domainField,
+            lbl("Keywords"),    keywordsField,
+            lbl("Link / DOI"),  linkField,
+            lbl("Abstract"),    abstractArea,
+            btnRow, statusLbl, note
+        );
+        return pane;
+    }
+
+    // ══ TAB 3 — My Papers ═════════════════════════════════════════════
+    private VBox buildMyPapersPane() {
+        VBox pane = new VBox(14);
+
+        Text heading = new Text("My Papers");
+        heading.setFont(Font.font("Georgia", FontWeight.BOLD, 20));
+        heading.setFill(Color.web("#e2e8f0"));
+
+        User cu = AuthService.getCurrentUser();
+        if (!(cu instanceof Researcher researcher)) {
+            Label note = new Label("Log in as a Researcher to see your papers.");
+            note.setTextFill(Color.web("#8892a4"));
+            pane.getChildren().addAll(heading, note);
+            return pane;
         }
 
-        table.getColumns().addAll(titleCol, authorCol, domainCol, statusCol, dateCol);
+        List<ResearchPaper> mine = paperService.getPapersByResearcher(researcher);
 
-        // Row double-click → show abstract popup
-        table.setRowFactory(tv -> {
-            TableRow<ResearchPaper> row = new TableRow<>();
-            row.setOnMouseClicked(e -> {
-                if (e.getClickCount() == 2 && !row.isEmpty()) {
-                    showAbstractPopup(row.getItem());
+        Label countLbl = new Label(mine.size() + " paper(s)");
+        countLbl.setFont(Font.font("System", 12));
+        countLbl.setTextFill(Color.web("#4a5568"));
+
+        TableView<ResearchPaper> table = buildTable(true);
+        ObservableList<ResearchPaper> data = FXCollections.observableArrayList(mine);
+        table.setItems(data);
+
+        Label actionStatus = new Label("");
+        actionStatus.setFont(Font.font("System", 12));
+
+        Button submitBtn  = new Button("Submit for Review");
+        submitBtn.setStyle(secondaryBtnStyle());
+        Button publishBtn = new Button("✓ Publish");
+        publishBtn.setStyle(
+            "-fx-background-color:#68d391;-fx-text-fill:#1a1f2e;-fx-font-weight:bold;" +
+            "-fx-background-radius:6px;-fx-pref-height:36px;-fx-pref-width:120px;-fx-cursor:hand;");
+        Button deleteBtn  = new Button("✕ Delete");
+        deleteBtn.setStyle(
+            "-fx-background-color:#fc8181;-fx-text-fill:white;-fx-font-weight:bold;" +
+            "-fx-background-radius:6px;-fx-pref-height:36px;-fx-pref-width:100px;-fx-cursor:hand;");
+        HBox actions = new HBox(10, submitBtn, publishBtn, deleteBtn);
+
+        Runnable refresh = () -> {
+            data.setAll(paperService.getPapersByResearcher(researcher));
+            countLbl.setText(data.size() + " paper(s)");
+        };
+
+        submitBtn.setOnAction(e -> {
+            ResearchPaper sel = table.getSelectionModel().getSelectedItem();
+            if (sel == null) { status(actionStatus, "Select a paper.", false); return; }
+            try {
+                paperService.submitForReview(sel.getPaperId());
+                refresh.run();
+                status(actionStatus, "✓ Submitted for review.", true);
+            } catch (Exception ex) { status(actionStatus, ex.getMessage(), false); }
+        });
+
+        publishBtn.setOnAction(e -> {
+            ResearchPaper sel = table.getSelectionModel().getSelectedItem();
+            if (sel == null) { status(actionStatus, "Select a paper.", false); return; }
+            try {
+                paperService.publishPaper(sel.getPaperId());
+                refresh.run();
+                status(actionStatus,
+                    "✓ Published! Observer pattern fired → n8n email notifications sent.", true);
+            } catch (Exception ex) { status(actionStatus, ex.getMessage(), false); }
+        });
+
+        deleteBtn.setOnAction(e -> {
+            ResearchPaper sel = table.getSelectionModel().getSelectedItem();
+            if (sel == null) { status(actionStatus, "Select a paper.", false); return; }
+            Alert c = new Alert(Alert.AlertType.CONFIRMATION,
+                "Delete \"" + sel.getTitle() + "\"?", ButtonType.YES, ButtonType.NO);
+            c.showAndWait().ifPresent(b -> {
+                if (b == ButtonType.YES) {
+                    paperService.deletePaper(sel.getPaperId());
+                    refresh.run();
+                    status(actionStatus, "Paper deleted.", true);
                 }
+            });
+        });
+
+        pane.getChildren().addAll(heading, countLbl, table, actions, actionStatus);
+        return pane;
+    }
+
+    // ══ Shared table builder ══════════════════════════════════════════
+    @SuppressWarnings("unchecked")
+    private TableView<ResearchPaper> buildTable(boolean myPapers) {
+        TableView<ResearchPaper> t = new TableView<>();
+        t.setStyle(
+            "-fx-background-color:#1a1f2e;-fx-border-color:#2d3748;" +
+            "-fx-border-radius:8px;-fx-background-radius:8px;");
+        t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        VBox.setVgrow(t, Priority.ALWAYS);
+        t.setPlaceholder(new Label(myPapers ? "No papers yet." : "No results."));
+        t.getColumns().addAll(
+            col("Title",    "title",      280),
+            col("Author",   "author",     150),
+            col("Domain",   "domain",     150),
+            col("Status",   "status",     110),
+            col("Uploaded", "uploadedAt", 130)
+        );
+        t.setRowFactory(tv -> {
+            TableRow<ResearchPaper> row = new TableRow<>();
+            row.setOnMouseClicked(ev -> {
+                if (ev.getClickCount() == 2 && !row.isEmpty()) showDetail(row.getItem());
             });
             return row;
         });
-
-        return table;
+        return t;
     }
 
-    private void showAbstractPopup(ResearchPaper paper) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Paper Abstract");
-        alert.setHeaderText(paper.getTitle());
-        alert.setContentText(
-            "Author: " + paper.getAuthor() + "\n\n" +
-            "Domain: " + paper.getDomain() + "\n\n" +
-            "Abstract:\n" + (paper.getAbstractText() != null
-                ? paper.getAbstractText() : "No abstract available.") + "\n\n" +
-            "Status: " + paper.getStatus()
+    private void showDetail(ResearchPaper p) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION);
+        a.setTitle("Paper Details");
+        a.setHeaderText(p.getTitle());
+        a.setContentText(
+            "ID: "       + p.getPaperId()  + "\n" +
+            "Author: "   + p.getAuthor()   + "\n" +
+            "Domain: "   + p.getDomain()   + "\n" +
+            "Keywords: " + p.getKeywords() + "\n" +
+            "Status: "   + p.getStatus()   + "\n" +
+            "Link: "     + (p.getLink() != null ? p.getLink() : "—") + "\n\n" +
+            "Abstract:\n" + (p.getAbstractText() != null ? p.getAbstractText() : "—")
         );
-        alert.showAndWait();
+        a.getDialogPane().setPrefWidth(500);
+        a.showAndWait();
     }
 
-    private Button primaryButton(String text) {
-        Button btn = new Button(text);
-        btn.setStyle(
-            "-fx-background-color: #6c9bff; -fx-text-fill: white; " +
-            "-fx-font-weight: bold; -fx-pref-height: 42px; -fx-pref-width: 100px; " +
-            "-fx-background-radius: 6px; -fx-cursor: hand;");
-        return btn;
+    // ══ Style helpers ═════════════════════════════════════════════════
+    @SuppressWarnings("unchecked")
+    private TableColumn<ResearchPaper, String> col(String label, String prop, double w) {
+        TableColumn<ResearchPaper, String> c = new TableColumn<>(label);
+        c.setCellValueFactory(new PropertyValueFactory<>(prop));
+        c.setPrefWidth(w);
+        c.setStyle(
+            "-fx-background-color:#0f1117;-fx-text-fill:#8892a4;" +
+            "-fx-font-weight:bold;-fx-font-size:12px;");
+        return c;
     }
 
-    private void styleCheckBox(CheckBox cb) {
-        cb.setStyle("-fx-text-fill: #8892a4; -fx-font-size: 12px;");
+    private String fieldStyle() {
+        return "-fx-background-color:#1a1f2e;-fx-text-fill:#e2e8f0;" +
+               "-fx-prompt-text-fill:#4a5568;-fx-border-color:#2d3748;" +
+               "-fx-border-radius:6px;-fx-background-radius:6px;" +
+               "-fx-pref-height:40px;-fx-font-size:13px;-fx-padding:0 12px;";
+    }
+
+    private TextField formField(String prompt) {
+        TextField f = new TextField();
+        f.setPromptText(prompt);
+        f.setStyle(fieldStyle());
+        f.setMaxWidth(Double.MAX_VALUE);
+        return f;
+    }
+
+    private Label lbl(String text) {
+        Label l = new Label(text);
+        l.setFont(Font.font("System", FontWeight.BOLD, 11));
+        l.setTextFill(Color.web("#8892a4"));
+        return l;
+    }
+
+    private Button primaryBtn(String text) {
+        Button b = new Button(text);
+        b.setStyle(
+            "-fx-background-color:#6c9bff;-fx-text-fill:white;-fx-font-weight:bold;" +
+            "-fx-pref-height:40px;-fx-pref-width:150px;" +
+            "-fx-background-radius:6px;-fx-cursor:hand;");
+        return b;
+    }
+
+    private String secondaryBtnStyle() {
+        return "-fx-background-color:#2d3748;-fx-text-fill:#a0aec0;-fx-font-weight:bold;" +
+               "-fx-background-radius:6px;-fx-pref-height:36px;-fx-pref-width:160px;-fx-cursor:hand;";
+    }
+
+    private ToggleButton tabBtn(String text, ToggleGroup g, boolean sel) {
+        ToggleButton b = new ToggleButton(text);
+        b.setToggleGroup(g);
+        b.setSelected(sel);
+        String base = "-fx-background-radius:6px;-fx-cursor:hand;-fx-font-size:12px;-fx-padding:8 16;";
+        b.setStyle("-fx-background-color:#1a1f2e;-fx-text-fill:#8892a4;" + base);
+        b.selectedProperty().addListener((obs, o, n) -> b.setStyle(n
+            ? "-fx-background-color:#6c9bff;-fx-text-fill:white;-fx-font-weight:bold;" + base
+            : "-fx-background-color:#1a1f2e;-fx-text-fill:#8892a4;" + base));
+        return b;
+    }
+
+    private void status(Label l, String msg, boolean ok) {
+        l.setTextFill(Color.web(ok ? "#68d391" : "#fc8181"));
+        l.setText(msg);
     }
 }

@@ -97,46 +97,4 @@ class NotificationService {
     }
 }
 
-
-/**
- * PaperService - paper upload, search, review workflow.
- * Minor use case shared across Member 1 (search) and Member 2 (upload).
- */
-@Service
-class PaperService {
-
-    private final ResearchPaperRepository paperRepository;
-    private final RecommendationService recommendationService;
-
-    PaperService(ResearchPaperRepository paperRepository,
-                 RecommendationService recommendationService) {
-        this.paperRepository = paperRepository;
-        this.recommendationService = recommendationService;
-    }
-
-    public List<ResearchPaper> searchPapers(String query) {
-        return paperRepository.searchByQuery(query);
-    }
-
-    public List<ResearchPaper> getPublishedPapers() {
-        return paperRepository.findByStatus(ResearchPaper.PaperStatus.PUBLISHED);
-    }
-
-    @Transactional
-    public ResearchPaper uploadPaper(ResearchPaper paper, Researcher uploader) {
-        uploader.uploadPaper(paper);
-        ResearchPaper saved = paperRepository.save(paper);
-        return saved;
-    }
-
-    @Transactional
-    public ResearchPaper publishPaper(Long paperId) {
-        ResearchPaper paper = paperRepository.findById(paperId)
-            .orElseThrow(() -> new IllegalArgumentException("Paper not found"));
-        paper.updateStatus(ResearchPaper.PaperStatus.PUBLISHED);
-        ResearchPaper saved = paperRepository.save(paper);
-        // Fire Observer → email notifications
-        recommendationService.onNewPaperPublished(saved);
-        return saved;
-    }
-}
+// PaperService has been moved to its own file: service/PaperService.java
