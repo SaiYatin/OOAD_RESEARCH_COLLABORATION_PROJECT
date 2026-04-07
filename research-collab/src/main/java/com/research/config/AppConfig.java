@@ -1,6 +1,8 @@
 package com.research.config;
 
 import com.research.model.Expert;
+import com.research.model.User;
+import com.research.service.AuthService;
 import com.research.service.ExpertService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
@@ -31,7 +33,6 @@ public class AppConfig {
     @Bean
     public CommandLineRunner seedExpertData(ExpertService expertService) {
         return args -> {
-            // Check if data already seeded
             if (expertService.getAllActiveExperts().size() > 5) {
                 System.out.println("[Startup] Expert data already seeded. Skipping.");
                 return;
@@ -40,6 +41,22 @@ public class AppConfig {
             List<String[]> rows = loadCsvRows();
             int count = expertService.bulkImportFromCsv(rows);
             System.out.printf("[Startup] Seeded %d experts successfully.%n", count);
+        };
+    }
+
+    /**
+     * Auto-seed admin account: admin@research.com / admin123
+     */
+    @Bean
+    public CommandLineRunner seedAdminAccount(AuthService authService) {
+        return args -> {
+            try {
+                authService.register("System Admin", "admin@research.com",
+                        "admin123", User.UserRole.ADMIN);
+                System.out.println("[Startup] ✓ Admin account created: admin@research.com / admin123");
+            } catch (IllegalArgumentException e) {
+                System.out.println("[Startup] Admin account already exists.");
+            }
         };
     }
 

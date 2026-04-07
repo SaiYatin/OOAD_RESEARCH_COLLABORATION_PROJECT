@@ -16,7 +16,6 @@ public class UserFactory {
             case ADMIN        -> new Admin();
             case REVIEWER     -> new Reviewer();
             case VISITOR      -> new Visitor();
-            case COLLABORATOR -> new Collaborator();
         };
         user.setName(name);
         user.setEmail(email);

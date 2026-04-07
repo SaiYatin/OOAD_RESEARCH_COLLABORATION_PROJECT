@@ -2,9 +2,12 @@ package com.research.view.dashboard;
 
 import com.research.model.User;
 import com.research.service.AuthService;
+import com.research.view.admin.AdminView;
 import com.research.view.expert.ExpertSearchView;
 import com.research.view.paper.PaperSearchView;
 import com.research.view.collab.CollaborationView;
+import com.research.view.research.MyResearchesView;
+import com.research.view.reviewer.ReviewerDashboardView;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -18,7 +21,7 @@ import org.springframework.stereotype.Component;
 /**
  * DashboardView - main shell after successful login.
  * Left sidebar navigation → swaps content area per tab.
- * MVC: This is the View / routing layer.
+ * Adapts navigation based on user role (RESEARCHER, REVIEWER, ADMIN).
  */
 @Component
 public class DashboardView {
@@ -26,24 +29,30 @@ public class DashboardView {
     private final ExpertSearchView expertSearchView;
     private final PaperSearchView paperSearchView;
     private final CollaborationView collaborationView;
+    private final MyResearchesView myResearchesView;
+    private final ReviewerDashboardView reviewerDashboardView;
+    private final AdminView adminView;
     private final AuthService authService;
 
-    // Content area reference for panel swapping
     private StackPane contentArea;
-    private Stage currentStage;
 
     public DashboardView(ExpertSearchView expertSearchView,
                          PaperSearchView paperSearchView,
                          CollaborationView collaborationView,
+                         MyResearchesView myResearchesView,
+                         ReviewerDashboardView reviewerDashboardView,
+                         AdminView adminView,
                          AuthService authService) {
         this.expertSearchView = expertSearchView;
         this.paperSearchView = paperSearchView;
         this.collaborationView = collaborationView;
+        this.myResearchesView = myResearchesView;
+        this.reviewerDashboardView = reviewerDashboardView;
+        this.adminView = adminView;
         this.authService = authService;
     }
 
     public void show(Stage stage, User user) {
-        this.currentStage = stage;
         stage.setTitle("ResearchConnect — " + user.getName());
         stage.setWidth(1200);
         stage.setHeight(750);
@@ -76,7 +85,6 @@ public class DashboardView {
                            "-fx-border-radius: 4px; -fx-padding: 4 10;");
         logoutBtn.setOnAction(e -> {
             authService.logout();
-            // Return to login screen
             com.research.view.auth.LoginView loginView =
                 com.research.ResearchCollaborationApp.getSpringContext()
                     .getBean(com.research.view.auth.LoginView.class);
@@ -102,55 +110,36 @@ public class DashboardView {
         contentArea.setStyle("-fx-background-color: #0f1117;");
         contentArea.setPadding(new Insets(24));
 
-        // Default view: Paper Search
-        contentArea.getChildren().add(paperSearchView.buildPanel());
-
-        // Nav buttons
-        Button[] navBtns = {
-            navButton("📄  Paper Search",   true),
-            navButton("🔬  Find Experts",   false),
-            navButton("🤝  Collaborations", false),
-            navButton("👤  My Profile",     false)
-        };
-
-        navBtns[0].setOnAction(e -> {
-            resetNavButtons(navBtns);
-            selectNavButton(navBtns[0]);
-            swapContent(paperSearchView.buildPanel());
-        });
-        navBtns[1].setOnAction(e -> {
-            resetNavButtons(navBtns);
-            selectNavButton(navBtns[1]);
-            swapContent(expertSearchView.buildPanel());
-        });
-        navBtns[2].setOnAction(e -> {
-            resetNavButtons(navBtns);
-            selectNavButton(navBtns[2]);
-            swapContent(collaborationView.buildPanel(user));
-        });
-        navBtns[3].setOnAction(e -> {
-            resetNavButtons(navBtns);
-            selectNavButton(navBtns[3]);
-            swapContent(buildProfilePanel(user));
-        });
-
         sidebar.getChildren().add(sectionLabel);
-        for (Button btn : navBtns) sidebar.getChildren().add(btn);
 
-        // Role-specific sections
+        // Build navigation based on role
+        if (user.getRole() == User.UserRole.REVIEWER) {
+            buildReviewerNav(sidebar, user);
+        } else {
+            buildResearcherNav(sidebar, user);
+        }
+
+        // Admin section
         if (user.getRole() == User.UserRole.ADMIN) {
             Label adminLabel = new Label("ADMIN");
             adminLabel.setFont(Font.font("System", FontWeight.BOLD, 10));
             adminLabel.setTextFill(Color.web("#4a5568"));
             adminLabel.setPadding(new Insets(16, 0, 8, 8));
             Button adminBtn = navButton("⚙️  Admin Panel", false);
+            adminBtn.setOnAction(e -> {
+                swapContent(adminView.buildPanel());
+                adminBtn.setStyle("-fx-background-color: #fc818122; -fx-text-fill: #fc8181; " +
+                    "-fx-background-radius: 6px; -fx-cursor: hand; -fx-alignment: CENTER-LEFT; " +
+                    "-fx-font-weight: bold; -fx-border-color: transparent transparent transparent #fc8181; " +
+                    "-fx-border-width: 0 0 0 3;");
+            });
             sidebar.getChildren().addAll(adminLabel, adminBtn);
         }
 
         // Version info
         Region sidebarSpacer = new Region();
         VBox.setVgrow(sidebarSpacer, Priority.ALWAYS);
-        Label versionLabel = new Label("v1.0.0 · Research Collab");
+        Label versionLabel = new Label("v2.0.0 · Research Collab");
         versionLabel.setFont(Font.font("System", 10));
         versionLabel.setTextFill(Color.web("#2d3748"));
         versionLabel.setPadding(new Insets(0, 0, 0, 8));
@@ -163,6 +152,78 @@ public class DashboardView {
         stage.setScene(new Scene(root));
         stage.show();
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // Researcher Navigation
+    // ═══════════════════════════════════════════════════════════
+
+    private void buildResearcherNav(VBox sidebar, User user) {
+        Button paperBtn   = navButton("📄  Paper Search", true);
+        Button expertBtn  = navButton("🔬  Find Experts", false);
+        Button collabBtn  = navButton("🤝  Collaborations", false);
+        Button researchBtn = navButton("🔬  My Researches", false);
+        Button profileBtn = navButton("👤  My Profile", false);
+
+        Button[] navBtns = {paperBtn, expertBtn, collabBtn, researchBtn, profileBtn};
+
+        contentArea.getChildren().add(paperSearchView.buildPanel());
+
+        paperBtn.setOnAction(e -> {
+            resetNavButtons(navBtns); selectNavButton(paperBtn);
+            swapContent(paperSearchView.buildPanel());
+        });
+        expertBtn.setOnAction(e -> {
+            resetNavButtons(navBtns); selectNavButton(expertBtn);
+            swapContent(expertSearchView.buildPanel());
+        });
+        collabBtn.setOnAction(e -> {
+            resetNavButtons(navBtns); selectNavButton(collabBtn);
+            swapContent(collaborationView.buildPanel(user));
+        });
+        researchBtn.setOnAction(e -> {
+            resetNavButtons(navBtns); selectNavButton(researchBtn);
+            swapContent(myResearchesView.buildPanel());
+        });
+        profileBtn.setOnAction(e -> {
+            resetNavButtons(navBtns); selectNavButton(profileBtn);
+            swapContent(buildProfilePanel(user));
+        });
+
+        for (Button btn : navBtns) sidebar.getChildren().add(btn);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Reviewer Navigation
+    // ═══════════════════════════════════════════════════════════
+
+    private void buildReviewerNav(VBox sidebar, User user) {
+        Button reviewBtn  = navButton("📋  Review Papers", true);
+        Button paperBtn   = navButton("📄  Paper Search", false);
+        Button profileBtn = navButton("👤  My Profile", false);
+
+        Button[] navBtns = {reviewBtn, paperBtn, profileBtn};
+
+        contentArea.getChildren().add(reviewerDashboardView.buildPanel());
+
+        reviewBtn.setOnAction(e -> {
+            resetNavButtons(navBtns); selectNavButton(reviewBtn);
+            swapContent(reviewerDashboardView.buildPanel());
+        });
+        paperBtn.setOnAction(e -> {
+            resetNavButtons(navBtns); selectNavButton(paperBtn);
+            swapContent(paperSearchView.buildPanel());
+        });
+        profileBtn.setOnAction(e -> {
+            resetNavButtons(navBtns); selectNavButton(profileBtn);
+            swapContent(buildProfilePanel(user));
+        });
+
+        for (Button btn : navBtns) sidebar.getChildren().add(btn);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Shared helpers
+    // ═══════════════════════════════════════════════════════════
 
     private void swapContent(javafx.scene.Node panel) {
         contentArea.getChildren().clear();
@@ -199,8 +260,6 @@ public class DashboardView {
         lbl.setPadding(new Insets(4, 0, 4, 0));
         return lbl;
     }
-
-    // ── Nav button styling ────────────────────────────────────────────
 
     private Button navButton(String text, boolean selected) {
         Button btn = new Button(text);

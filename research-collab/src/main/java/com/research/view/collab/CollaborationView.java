@@ -1,6 +1,7 @@
 package com.research.view.collab;
 
 import com.research.model.*;
+import com.research.repository.ResearchPaperRepository;
 import com.research.repository.ResearchProjectRepository;
 import com.research.repository.UserRepository;
 import com.research.service.AuthService;
@@ -13,33 +14,42 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.*;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- * CollaborationView — Member 3's complete view.
+ * CollaborationView — Reworked collaboration page.
  *
  * Tabs:
- *   1. Inbox     — pending requests you received, accept/reject
- *   2. Sent      — requests you sent, track status
- *   3. Projects  — create research projects, view members
- *   4. Following — follow keywords for email notifications (Observer pattern)
- *   5. New Request — send a collaboration request to anyone
- *
- * Design Pattern: Observer (keyword follow → n8n email on new paper)
- * Design Principle: SRP (each tab = one responsibility)
+ *   1. Inbox            — incoming requests (grouped by project)
+ *   2. Sent             — sent requests with status
+ *   3. Following        — interest-based research feed + domain selection
+ *   4. Active Collabs   — browse open projects, toggle all/filtered by interests
  */
 @Component
 public class CollaborationView {
 
     private final CollaborationService collaborationService;
     private final ResearchProjectRepository projectRepository;
+    private final ResearchPaperRepository paperRepository;
     private final UserRepository userRepository;
+
+    private static final String[] AVAILABLE_DOMAINS = {
+        "Machine Learning", "Deep Learning", "Natural Language Processing",
+        "Computer Vision", "Data Science", "Signal Processing",
+        "Robotics", "IoT", "Network Security", "Biotechnology",
+        "Economics", "Composite Materials", "Heat Transfer",
+        "Earthquake Engineering", "Mathematics", "Other"
+    };
 
     public CollaborationView(CollaborationService collaborationService,
                              ResearchProjectRepository projectRepository,
+                             ResearchPaperRepository paperRepository,
                              UserRepository userRepository) {
         this.collaborationService = collaborationService;
         this.projectRepository = projectRepository;
+        this.paperRepository = paperRepository;
         this.userRepository = userRepository;
     }
 
@@ -50,7 +60,6 @@ public class CollaborationView {
         VBox header = new VBox(4);
         header.setPadding(new Insets(0, 0, 16, 0));
 
-        // Pending badge count
         long pendingCount = 0;
         try {
             pendingCount = collaborationService
@@ -71,19 +80,18 @@ public class CollaborationView {
             titleRow.getChildren().add(title);
         }
 
-        Text subtitle = new Text("Requests · Projects · Follow research threads · Observer-driven email alerts");
+        Text subtitle = new Text("Requests · Follow Interests · Active Collaborations");
         subtitle.setFont(Font.font("System", 13));
         subtitle.setFill(Color.web("#8892a4"));
         header.getChildren().addAll(titleRow, subtitle);
 
-        // Tabs
+        // Tabs — removed Projects (→ My Researches) and New Request (→ Find Experts)
         ToggleGroup tabGroup = new ToggleGroup();
-        ToggleButton inboxTab   = tabBtn("📥 Inbox"       + (pendingCount > 0 ? " (" + pendingCount + ")" : ""), tabGroup, true);
-        ToggleButton sentTab    = tabBtn("📤 Sent",         tabGroup, false);
-        ToggleButton projectTab = tabBtn("🗂 Projects",     tabGroup, false);
-        ToggleButton followTab  = tabBtn("🔔 Following",    tabGroup, false);
-        ToggleButton newTab     = tabBtn("➕ New Request",  tabGroup, false);
-        HBox tabRow = new HBox(4, inboxTab, sentTab, projectTab, followTab, newTab);
+        ToggleButton inboxTab   = tabBtn("📥 Inbox" + (pendingCount > 0 ? " (" + pendingCount + ")" : ""), tabGroup, true);
+        ToggleButton sentTab    = tabBtn("📤 Sent", tabGroup, false);
+        ToggleButton followTab  = tabBtn("🔔 Following", tabGroup, false);
+        ToggleButton activeTab  = tabBtn("🤝 Active Collaborations", tabGroup, false);
+        HBox tabRow = new HBox(4, inboxTab, sentTab, followTab, activeTab);
         tabRow.setPadding(new Insets(0, 0, 16, 0));
 
         StackPane content = new StackPane();
@@ -92,11 +100,10 @@ public class CollaborationView {
 
         tabGroup.selectedToggleProperty().addListener((obs, o, n) -> {
             content.getChildren().clear();
-            if (n == inboxTab)   content.getChildren().add(buildInboxPane(currentUser));
-            else if (n == sentTab)    content.getChildren().add(buildSentPane(currentUser));
-            else if (n == projectTab) content.getChildren().add(buildProjectPane(currentUser));
-            else if (n == followTab)  content.getChildren().add(buildFollowPane(currentUser));
-            else if (n == newTab)     content.getChildren().add(buildNewRequestPane(currentUser));
+            if (n == inboxTab)      content.getChildren().add(buildInboxPane(currentUser));
+            else if (n == sentTab)  content.getChildren().add(buildSentPane(currentUser));
+            else if (n == followTab) content.getChildren().add(buildFollowPane(currentUser));
+            else if (n == activeTab) content.getChildren().add(buildActiveCollabsPane(currentUser));
         });
 
         panel.getChildren().addAll(header, tabRow, content);
@@ -109,7 +116,7 @@ public class CollaborationView {
         VBox pane = new VBox(12);
 
         Text heading = sectionHeading("Incoming Requests");
-        Label desc = smallNote("Collaboration requests sent to you. Accept to add them to your project.");
+        Label desc = smallNote("Collaboration requests sent to you. Accept to join their project.");
         pane.getChildren().addAll(heading, desc);
 
         List<CollaborationRequest> pending;
@@ -125,43 +132,56 @@ public class CollaborationView {
             return pane;
         }
 
+        // Group by project
+        var byProject = pending.stream().collect(Collectors.groupingBy(
+            req -> req.getProject() != null ? req.getProject().getTopic() : "General"));
+
         ScrollPane scroll = new ScrollPane();
         VBox cards = new VBox(10);
         scroll.setContent(cards); scroll.setFitToWidth(true);
         scroll.setStyle("-fx-background-color:transparent;-fx-background:transparent;");
         VBox.setVgrow(scroll, Priority.ALWAYS);
 
-        for (CollaborationRequest req : pending) {
-            Label actionStatus = new Label("");
-            actionStatus.setFont(Font.font("System", 11));
-            VBox card = requestCard(req, true, actionStatus);
+        for (var entry : byProject.entrySet()) {
+            // Project group header
+            Label groupLabel = new Label("📂 " + entry.getKey());
+            groupLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
+            groupLabel.setTextFill(Color.web("#6c9bff"));
+            groupLabel.setPadding(new Insets(8, 0, 4, 0));
+            cards.getChildren().add(groupLabel);
 
-            Button acceptBtn = new Button("✓ Accept");
-            acceptBtn.setStyle("-fx-background-color:#68d391;-fx-text-fill:#1a1f2e;-fx-font-weight:bold;" +
-                               "-fx-background-radius:6px;-fx-pref-height:34px;-fx-pref-width:100px;-fx-cursor:hand;");
-            Button rejectBtn = new Button("✕ Reject");
-            rejectBtn.setStyle("-fx-background-color:#fc8181;-fx-text-fill:white;-fx-font-weight:bold;" +
-                               "-fx-background-radius:6px;-fx-pref-height:34px;-fx-pref-width:100px;-fx-cursor:hand;");
-            HBox btnRow = new HBox(10, acceptBtn, rejectBtn, actionStatus);
-            btnRow.setAlignment(Pos.CENTER_LEFT);
+            for (CollaborationRequest req : entry.getValue()) {
+                Label actionStatus = new Label("");
+                actionStatus.setFont(Font.font("System", 11));
+                VBox card = requestCard(req, true, actionStatus);
 
-            acceptBtn.setOnAction(e -> {
-                try {
-                    collaborationService.acceptRequest(req.getRequestId());
-                    status(actionStatus, "✓ Accepted! Sender added to project if linked.", true);
-                    acceptBtn.setDisable(true); rejectBtn.setDisable(true);
-                } catch (Exception ex) { status(actionStatus, ex.getMessage(), false); }
-            });
-            rejectBtn.setOnAction(e -> {
-                try {
-                    collaborationService.rejectRequest(req.getRequestId());
-                    status(actionStatus, "Request rejected.", false);
-                    acceptBtn.setDisable(true); rejectBtn.setDisable(true);
-                } catch (Exception ex) { status(actionStatus, ex.getMessage(), false); }
-            });
+                Button acceptBtn = new Button("✓ Accept");
+                acceptBtn.setStyle("-fx-background-color:#68d391;-fx-text-fill:#1a1f2e;-fx-font-weight:bold;" +
+                                   "-fx-background-radius:6px;-fx-pref-height:34px;-fx-pref-width:100px;-fx-cursor:hand;");
+                Button rejectBtn = new Button("✕ Reject");
+                rejectBtn.setStyle("-fx-background-color:#fc8181;-fx-text-fill:white;-fx-font-weight:bold;" +
+                                   "-fx-background-radius:6px;-fx-pref-height:34px;-fx-pref-width:100px;-fx-cursor:hand;");
+                HBox btnRow = new HBox(10, acceptBtn, rejectBtn, actionStatus);
+                btnRow.setAlignment(Pos.CENTER_LEFT);
 
-            card.getChildren().add(btnRow);
-            cards.getChildren().add(card);
+                acceptBtn.setOnAction(e -> {
+                    try {
+                        collaborationService.acceptRequest(req.getRequestId());
+                        status(actionStatus, "✓ Accepted! Sender added to project.", true);
+                        acceptBtn.setDisable(true); rejectBtn.setDisable(true);
+                    } catch (Exception ex) { status(actionStatus, ex.getMessage(), false); }
+                });
+                rejectBtn.setOnAction(e -> {
+                    try {
+                        collaborationService.rejectRequest(req.getRequestId());
+                        status(actionStatus, "Request rejected.", false);
+                        acceptBtn.setDisable(true); rejectBtn.setDisable(true);
+                    } catch (Exception ex) { status(actionStatus, ex.getMessage(), false); }
+                });
+
+                card.getChildren().add(btnRow);
+                cards.getChildren().add(card);
+            }
         }
 
         pane.getChildren().add(scroll);
@@ -180,7 +200,8 @@ public class CollaborationView {
         catch (Exception e) { pane.getChildren().add(emptyLabel(e.getMessage())); return pane; }
 
         if (sent.isEmpty()) {
-            pane.getChildren().add(emptyLabel("You haven't sent any requests yet.")); return pane;
+            pane.getChildren().add(emptyLabel("You haven't sent any requests yet. Use 'Find Experts' to discover collaborators."));
+            return pane;
         }
 
         ScrollPane scroll = new ScrollPane();
@@ -197,143 +218,149 @@ public class CollaborationView {
         return pane;
     }
 
-    // ══ TAB 3: Projects ═════════════════════════════════════════════
-
-    private VBox buildProjectPane(User user) {
-        VBox pane = new VBox(16);
-        pane.getChildren().addAll(sectionHeading("Research Projects"),
-            smallNote("Create and manage research projects. Accepted collaborators are added as members."));
-
-        // Create project form
-        VBox createBox = new VBox(10);
-        createBox.setPadding(new Insets(16));
-        createBox.setStyle("-fx-background-color:#1a1f2e;-fx-background-radius:10px;-fx-border-color:#2d3748;-fx-border-radius:10px;");
-        createBox.setMaxWidth(520);
-
-        Label createHeading = new Label("Create New Project");
-        createHeading.setFont(Font.font("Georgia", FontWeight.BOLD, 15));
-        createHeading.setTextFill(Color.web("#e2e8f0"));
-
-        TextField topicField = new TextField();
-        topicField.setPromptText("Project topic / title *");
-        topicField.setStyle(fieldStyle());
-
-        TextArea descArea = new TextArea();
-        descArea.setPromptText("Project description (optional)");
-        descArea.setPrefRowCount(3); descArea.setWrapText(true);
-        descArea.setStyle(fieldStyle() + "-fx-pref-height:70px;");
-
-        Button createBtn = primaryBtn("Create Project");
-        Label createStatus = new Label("");
-        createStatus.setFont(Font.font("System", 12));
-
-        createBtn.setOnAction(e -> {
-            String topic = topicField.getText().trim();
-            if (topic.isBlank()) { status(createStatus, "Enter a project topic.", false); return; }
-            if (!(user instanceof Researcher researcher)) {
-                status(createStatus, "Only Researcher accounts can create projects.", false); return;
-            }
-            ResearchProject proj = researcher.createResearchProject(topic);
-            proj.setDescription(descArea.getText().trim());
-            projectRepository.save(proj);
-            status(createStatus, "✓ Project \"" + topic + "\" created!", true);
-            topicField.clear(); descArea.clear();
-            // Refresh list below — reload pane on next click
-        });
-
-        createBox.getChildren().addAll(createHeading, lbl("Topic *"), topicField,
-            lbl("Description"), descArea, createBtn, createStatus);
-
-        // Existing projects list
-        VBox projectList = new VBox(8);
-        projectList.getChildren().add(sectionHeading("Your Projects"));
-
-        if (user instanceof Researcher researcher) {
-            List<ResearchProject> projects = projectRepository.findByOwner(researcher);
-            if (projects.isEmpty()) {
-                projectList.getChildren().add(emptyLabel("No projects yet."));
-            } else {
-                for (ResearchProject proj : projects) {
-                    VBox projCard = new VBox(4);
-                    projCard.setPadding(new Insets(12, 16, 12, 16));
-                    projCard.setStyle("-fx-background-color:#1a1f2e;-fx-background-radius:8px;-fx-border-color:#2d3748;-fx-border-radius:8px;");
-                    Label topicLbl = new Label(proj.getTopic());
-                    topicLbl.setFont(Font.font("Georgia", FontWeight.BOLD, 14));
-                    topicLbl.setTextFill(Color.web("#e2e8f0"));
-                    Label membersLbl = new Label("Members: " + proj.getMembers().size() +
-                        " | ID: " + proj.getProjectId());
-                    membersLbl.setFont(Font.font("System", 11));
-                    membersLbl.setTextFill(Color.web("#8892a4"));
-                    projCard.getChildren().addAll(topicLbl, membersLbl);
-                    projectList.getChildren().add(projCard);
-                }
-            }
-        } else {
-            projectList.getChildren().add(emptyLabel("Log in as Researcher to manage projects."));
-        }
-
-        pane.getChildren().addAll(createBox, projectList);
-        return pane;
-    }
-
-    // ══ TAB 4: Following (Observer pattern UI) ══════════════════════
+    // ══ TAB 3: Following (Interests + Feed) ═════════════════════════
 
     private VBox buildFollowPane(User user) {
         VBox pane = new VBox(16);
-        pane.setMaxWidth(560);
 
         pane.getChildren().addAll(
-            sectionHeading("Follow Research Keywords"),
-            smallNote("When a new paper matching your keywords is published, " +
-                      "the Observer pattern fires and n8n Workflow 3 sends you an email automatically.")
+            sectionHeading("Research Interests & Feed"),
+            smallNote("Select domains you're interested in. You'll see papers matching your interests, " +
+                      "and get email alerts via the Observer pattern when new papers are published.")
         );
 
-        // Keyword input
-        HBox addRow = new HBox(12);
+        // Check if user has set interests
+        List<String> currentInterests = new ArrayList<>();
+        Researcher researcher = null;
+        if (user instanceof Researcher r) {
+            researcher = r;
+            currentInterests = new ArrayList<>(r.getInterestedDomains());
+        }
+
+        boolean firstTime = currentInterests.isEmpty();
+
+        // Domain selector
+        VBox selectorBox = new VBox(10);
+        selectorBox.setPadding(new Insets(16));
+        selectorBox.setStyle("-fx-background-color:#1a1f2e;-fx-background-radius:10px;");
+        selectorBox.setMaxWidth(600);
+
+        Text selectorTitle = new Text(firstTime ? "🎯 Select Your Research Interests" : "📝 Your Research Interests");
+        selectorTitle.setFont(Font.font("System", FontWeight.BOLD, 16));
+        selectorTitle.setFill(Color.web("#6c9bff"));
+
+        if (firstTime) {
+            Label prompt = new Label("This is your first time! Pick domains you're interested in to customize your feed.");
+            prompt.setTextFill(Color.web("#ecc94b"));
+            prompt.setFont(Font.font("System", 12));
+            prompt.setWrapText(true);
+            selectorBox.getChildren().addAll(selectorTitle, prompt);
+        } else {
+            selectorBox.getChildren().add(selectorTitle);
+        }
+
+        // Checkboxes for domains
+        FlowPane domainGrid = new FlowPane(8, 8);
+        List<CheckBox> checkBoxes = new ArrayList<>();
+        final List<String> interests = currentInterests;
+
+        for (String domain : AVAILABLE_DOMAINS) {
+            CheckBox cb = new CheckBox(domain);
+            cb.setTextFill(Color.web("#a0aec0"));
+            cb.setSelected(interests.contains(domain));
+            cb.setStyle("-fx-font-size: 12px;");
+            checkBoxes.add(cb);
+            domainGrid.getChildren().add(cb);
+        }
+
+        Label saveStatus = new Label("");
+        saveStatus.setFont(Font.font("System", 12));
+
+        Button saveBtn = new Button("💾 Save Interests");
+        saveBtn.setStyle("-fx-background-color:#6c9bff;-fx-text-fill:white;-fx-font-weight:bold;" +
+                         "-fx-background-radius:6px;-fx-cursor:hand;-fx-padding:8 20;");
+
+        final Researcher finalResearcher = researcher;
+        saveBtn.setOnAction(e -> {
+            if (finalResearcher == null) {
+                status(saveStatus, "Only researchers can set interests.", false);
+                return;
+            }
+            List<String> selected = checkBoxes.stream()
+                .filter(CheckBox::isSelected)
+                .map(CheckBox::getText)
+                .collect(Collectors.toList());
+
+            if (selected.isEmpty()) {
+                status(saveStatus, "Select at least one domain.", false);
+                return;
+            }
+
+            finalResearcher.setInterestedDomains(selected);
+            userRepository.save(finalResearcher);
+            status(saveStatus, "✓ Interests saved! Your feed is now personalized.", true);
+        });
+
+        selectorBox.getChildren().addAll(domainGrid, new HBox(10, saveBtn, saveStatus));
+
+        // Keyword follow (Observer pattern)
+        VBox keywordBox = new VBox(10);
+        keywordBox.setPadding(new Insets(16));
+        keywordBox.setStyle("-fx-background-color:#1a1f2e;-fx-background-radius:10px;");
+        keywordBox.setMaxWidth(600);
+
+        Text kwTitle = new Text("🏷 Email Alert Keywords (Observer Pattern)");
+        kwTitle.setFont(Font.font("System", FontWeight.BOLD, 14));
+        kwTitle.setFill(Color.web("#6c9bff"));
+
+        Label kwDesc = new Label("Follow specific keywords. When a paper matching your keywords is published, " +
+                                  "you'll get an email alert via n8n webhook.");
+        kwDesc.setTextFill(Color.web("#8892a4"));
+        kwDesc.setFont(Font.font("System", 11));
+        kwDesc.setWrapText(true);
+
+        HBox addRow = new HBox(8);
         addRow.setAlignment(Pos.CENTER_LEFT);
         TextField kwField = new TextField();
-        kwField.setPromptText("Keyword  e.g. Machine Learning, NLP, Robotics");
-        kwField.setStyle(fieldStyle());
+        kwField.setPromptText("Keyword e.g. Machine Learning, NLP...");
+        kwField.setStyle("-fx-background-color:#0f1117;-fx-text-fill:#e2e8f0;-fx-prompt-text-fill:#4a5568;" +
+                         "-fx-border-color:#2d3748;-fx-border-radius:6px;-fx-background-radius:6px;-fx-pref-height:36px;-fx-padding:0 12px;");
         HBox.setHgrow(kwField, Priority.ALWAYS);
-        Button addBtn = primaryBtn("+ Follow");
+
+        Button addBtn = new Button("+ Follow");
+        addBtn.setStyle("-fx-background-color:#6c9bff;-fx-text-fill:white;-fx-font-weight:bold;" +
+                        "-fx-background-radius:6px;-fx-cursor:hand;-fx-pref-height:36px;");
+        Label addStatus = new Label("");
+        addStatus.setFont(Font.font("System", 11));
         addRow.getChildren().addAll(kwField, addBtn);
 
-        Label addStatus = new Label("");
-        addStatus.setFont(Font.font("System", 12));
-
-        // Current keywords display
-        Label followLbl = new Label("Currently following:");
-        followLbl.setFont(Font.font("System", FontWeight.BOLD, 12));
-        followLbl.setTextFill(Color.web("#6c9bff"));
-
-        VBox chipBox = new VBox(6);
-        chipBox.setPadding(new Insets(10));
-        chipBox.setStyle("-fx-background-color:#1a1f2e;-fx-background-radius:8px;");
+        // Chips
+        FlowPane chipBox = new FlowPane(6, 6);
+        chipBox.setPadding(new Insets(4));
 
         final Runnable[] refreshChips = new Runnable[1];
         refreshChips[0] = () -> {
             chipBox.getChildren().clear();
-            if (!(user instanceof Researcher researcher)
-                    || researcher.getFollowedKeywords().isEmpty()) {
-                Label none = new Label("Not following any keywords yet.");
-                none.setFont(Font.font("System", FontPosture.ITALIC, 12));
+            if (finalResearcher == null || finalResearcher.getFollowedKeywords().isEmpty()) {
+                Label none = new Label("No keywords followed yet.");
+                none.setFont(Font.font("System", FontPosture.ITALIC, 11));
                 none.setTextFill(Color.web("#4a5568"));
                 chipBox.getChildren().add(none);
             } else {
-                for (String kw : ((Researcher) user).getFollowedKeywords()) {
-                    HBox chip = new HBox(8);
+                for (String kw : finalResearcher.getFollowedKeywords()) {
+                    HBox chip = new HBox(4);
                     chip.setAlignment(Pos.CENTER_LEFT);
-                    Label chipLbl = new Label("🏷  " + kw);
-                    chipLbl.setFont(Font.font("System", 12));
+                    Label chipLbl = new Label("🏷 " + kw);
+                    chipLbl.setFont(Font.font("System", 11));
                     chipLbl.setTextFill(Color.web("#6c9bff"));
-                    chipLbl.setStyle("-fx-background-color:#6c9bff22;-fx-padding:4 10;-fx-background-radius:12px;");
+                    chipLbl.setStyle("-fx-background-color:#6c9bff22;-fx-padding:3 8;-fx-background-radius:10px;");
                     Button removeBtn = new Button("×");
                     removeBtn.setStyle("-fx-background-color:transparent;-fx-text-fill:#fc8181;" +
-                                       "-fx-font-size:14px;-fx-cursor:hand;-fx-padding:0 4;");
+                                       "-fx-font-size:13px;-fx-cursor:hand;-fx-padding:0 3;");
                     final String kwFinal = kw;
-                    removeBtn.setOnAction(e -> {
-                        ((Researcher) user).getFollowedKeywords().remove(kwFinal);
-                        userRepository.save(user);
+                    removeBtn.setOnAction(ev -> {
+                        finalResearcher.getFollowedKeywords().remove(kwFinal);
+                        userRepository.save(finalResearcher);
                         refreshChips[0].run();
                     });
                     chip.getChildren().addAll(chipLbl, removeBtn);
@@ -341,108 +368,213 @@ public class CollaborationView {
                 }
             }
         };
-
         refreshChips[0].run();
 
         addBtn.setOnAction(e -> {
             String kw = kwField.getText().trim();
-            if (kw.isBlank()) { status(addStatus, "Enter a keyword.", false); return; }
-            if (!(user instanceof Researcher researcher)) {
-                status(addStatus, "Only Researcher accounts can follow keywords.", false); return;
-            }
-            if (!researcher.getFollowedKeywords().contains(kw)) {
-                researcher.getFollowedKeywords().add(kw);
-                userRepository.save(researcher);
+            if (kw.isBlank() || finalResearcher == null) return;
+            if (!finalResearcher.getFollowedKeywords().contains(kw)) {
+                finalResearcher.getFollowedKeywords().add(kw);
+                userRepository.save(finalResearcher);
             }
             kwField.clear();
-            status(addStatus, "✓ Now following \"" + kw + "\". Email alert fires via n8n when a matching paper is published.", true);
+            status(addStatus, "✓ Following \"" + kw + "\"", true);
             refreshChips[0].run();
         });
 
-        // How it works box
-        VBox howItWorks = new VBox(6);
-        howItWorks.setPadding(new Insets(12));
-        howItWorks.setStyle("-fx-background-color:#1a1f2e;-fx-background-radius:8px;-fx-border-color:#6c9bff44;-fx-border-radius:8px;");
-        Label howLbl = new Label("How the Observer pattern works here:");
-        howLbl.setFont(Font.font("System", FontWeight.BOLD, 12));
-        howLbl.setTextFill(Color.web("#6c9bff"));
-        String[] steps = {
-            "1. You follow a keyword (stored in your Researcher profile in MySQL)",
-            "2. A researcher publishes a paper tagged with that keyword",
-            "3. PaperService.publishPaper() calls RecommendationService.onNewPaperPublished()",
-            "4. PaperPublicationSubject notifies all EmailNotificationObserver instances",
-            "5. N8nWebhookCaller sends HTTP POST to n8n Workflow 3",
-            "6. n8n builds the HTML email and sends it via Gmail SMTP to you"
-        };
-        howItWorks.getChildren().add(howLbl);
-        for (String step : steps) {
-            Label s = new Label(step);
-            s.setFont(Font.font("Courier New", 11));
-            s.setTextFill(Color.web("#8892a4"));
-            s.setWrapText(true);
-            howItWorks.getChildren().add(s);
+        keywordBox.getChildren().addAll(kwTitle, kwDesc, addRow, addStatus, chipBox);
+
+        // Research feed based on interests
+        VBox feedBox = new VBox(10);
+        feedBox.setPadding(new Insets(16));
+        feedBox.setStyle("-fx-background-color:#1a1f2e;-fx-background-radius:10px;");
+
+        Text feedTitle = new Text("📄 Papers Matching Your Interests");
+        feedTitle.setFont(Font.font("System", FontWeight.BOLD, 14));
+        feedTitle.setFill(Color.web("#e2e8f0"));
+        feedBox.getChildren().add(feedTitle);
+
+        if (!currentInterests.isEmpty()) {
+            List<ResearchPaper> matchingPapers = new ArrayList<>();
+            try {
+                for (String domain : currentInterests) {
+                    matchingPapers.addAll(paperRepository.findByDomain(domain));
+                }
+            } catch (Exception ignored) {}
+
+            if (matchingPapers.isEmpty()) {
+                feedBox.getChildren().add(emptyLabel("No papers matching your interests yet."));
+            } else {
+                for (ResearchPaper paper : matchingPapers.stream().distinct().limit(10).collect(Collectors.toList())) {
+                    HBox row = new HBox(12);
+                    row.setPadding(new Insets(8));
+                    row.setStyle("-fx-background-color:#0f1117;-fx-background-radius:6px;");
+
+                    VBox info = new VBox(2);
+                    Label paperTitle = new Label(paper.getTitle());
+                    paperTitle.setFont(Font.font("System", FontWeight.BOLD, 12));
+                    paperTitle.setTextFill(Color.web("#e2e8f0"));
+                    Label paperDomain = new Label(paper.getDomain() != null ? paper.getDomain() : "");
+                    paperDomain.setTextFill(Color.web("#6c9bff"));
+                    paperDomain.setFont(Font.font("System", 10));
+                    info.getChildren().addAll(paperTitle, paperDomain);
+                    row.getChildren().add(info);
+                    feedBox.getChildren().add(row);
+                }
+            }
+        } else {
+            feedBox.getChildren().add(emptyLabel("Set your interests above to see personalized paper recommendations."));
         }
 
-        pane.getChildren().addAll(addRow, addStatus, followLbl, chipBox, howItWorks);
-        return pane;
+        pane.getChildren().addAll(selectorBox, keywordBox, feedBox);
+
+        // Wrap in scroll
+        ScrollPane scrollPane = new ScrollPane(pane);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setStyle("-fx-background-color:transparent;-fx-background:transparent;");
+
+        VBox wrapper = new VBox(scrollPane);
+        VBox.setVgrow(scrollPane, Priority.ALWAYS);
+        return wrapper;
     }
 
-    // ══ TAB 5: New Request ══════════════════════════════════════════
+    // ══ TAB 4: Active Collaborations ════════════════════════════════
 
-    private VBox buildNewRequestPane(User currentUser) {
+    private VBox buildActiveCollabsPane(User currentUser) {
         VBox pane = new VBox(12);
-        pane.setMaxWidth(520);
+
         pane.getChildren().addAll(
-            sectionHeading("Send Collaboration Request"),
-            smallNote("Send a request to any user by their ID. Find user IDs from the expert list or ask your team.")
+            sectionHeading("Active Collaborations"),
+            smallNote("Browse research projects looking for collaborators. Send a request to join!")
         );
 
-        TextField receiverField = formField("Recipient User ID  (number) *");
-        TextField projectField  = formField("Project ID  (optional — links request to a project)");
-        TextArea  messageArea   = new TextArea();
-        messageArea.setPromptText("Your message — introduce yourself and your collaboration intent…");
-        messageArea.setPrefRowCount(5); messageArea.setWrapText(true);
-        messageArea.setStyle(fieldStyle() + "-fx-pref-height:110px;");
+        // Toggle: All vs Filtered
+        ToggleGroup filterGroup = new ToggleGroup();
+        RadioButton allRadio = new RadioButton("All Open Projects");
+        allRadio.setToggleGroup(filterGroup);
+        allRadio.setSelected(true);
+        allRadio.setTextFill(Color.web("#a0aec0"));
 
-        Button sendBtn = primaryBtn("Send Request");
-        Label statusLbl = new Label("");
-        statusLbl.setWrapText(true); statusLbl.setFont(Font.font("System", 12));
+        RadioButton filteredRadio = new RadioButton("Matching My Interests");
+        filteredRadio.setToggleGroup(filterGroup);
+        filteredRadio.setTextFill(Color.web("#a0aec0"));
 
-        sendBtn.setOnAction(e -> {
-            String recvStr = receiverField.getText().trim();
-            if (recvStr.isBlank()) { status(statusLbl, "Enter recipient user ID.", false); return; }
-            try {
-                Long receiverId = Long.parseLong(recvStr);
-                Long projectId  = projectField.getText().isBlank()
-                    ? null : Long.parseLong(projectField.getText().trim());
-                String msg = messageArea.getText().trim();
+        HBox filterRow = new HBox(16, allRadio, filteredRadio);
+        filterRow.setPadding(new Insets(0, 0, 8, 0));
+        pane.getChildren().add(filterRow);
 
-                collaborationService.sendRequest(
-                    currentUser.getUserId(), receiverId, projectId, msg);
+        VBox projectList = new VBox(10);
 
-                status(statusLbl, "✓ Request sent to user #" + receiverId + "! They will see it in their Inbox.", true);
-                receiverField.clear(); projectField.clear(); messageArea.clear();
-            } catch (NumberFormatException ex) {
-                status(statusLbl, "User ID and Project ID must be numbers.", false);
-            } catch (Exception ex) {
-                status(statusLbl, "Error: " + ex.getMessage(), false);
+        Runnable loadProjects = () -> {
+            projectList.getChildren().clear();
+            List<ResearchProject> projects;
+
+            if (filteredRadio.isSelected() && currentUser instanceof Researcher r) {
+                List<String> myDomains = r.getInterestedDomains();
+                if (myDomains.isEmpty()) {
+                    projectList.getChildren().add(emptyLabel(
+                        "Set your interests in the 'Following' tab first to filter projects."));
+                    return;
+                }
+                projects = projectRepository.findByLookingForCollaboratorsTrueAndDomainIn(myDomains);
+            } else {
+                projects = projectRepository.findByLookingForCollaboratorsTrue();
             }
-        });
 
-        // Your user ID hint
-        Label myId = new Label("Your User ID: " + currentUser.getUserId() +
-            "  |  Share this with others so they can send you requests.");
-        myId.setFont(Font.font("Courier New", 11));
-        myId.setTextFill(Color.web("#4a5568"));
-        myId.setStyle("-fx-background-color:#1a1f2e;-fx-padding:8 12;-fx-background-radius:6px;");
+            if (projects.isEmpty()) {
+                projectList.getChildren().add(emptyLabel("No open collaboration opportunities right now."));
+                return;
+            }
 
-        pane.getChildren().addAll(
-            myId,
-            lbl("Recipient User ID *"), receiverField,
-            lbl("Project ID (optional)"), projectField,
-            lbl("Message"), messageArea,
-            sendBtn, statusLbl
-        );
+            for (ResearchProject project : projects) {
+                // Skip own projects (owner or member)
+                if (project.getOwner() != null &&
+                    project.getOwner().getUserId().equals(currentUser.getUserId())) continue;
+                boolean isMember = project.getMembers().stream()
+                    .anyMatch(m -> m.getUserId().equals(currentUser.getUserId()));
+                if (isMember) continue;
+
+                VBox card = new VBox(8);
+                card.setPadding(new Insets(14, 18, 14, 18));
+                card.setMaxWidth(700);
+                card.setStyle("-fx-background-color:#1a1f2e;-fx-background-radius:10px;" +
+                              "-fx-border-color:#2d3748;-fx-border-radius:10px;");
+
+                // Title + domain
+                HBox titleRow = new HBox(10);
+                titleRow.setAlignment(Pos.CENTER_LEFT);
+                Label topicLbl = new Label(project.getTopic());
+                topicLbl.setFont(Font.font("System", FontWeight.BOLD, 15));
+                topicLbl.setTextFill(Color.web("#e2e8f0"));
+
+                if (project.getDomain() != null) {
+                    Label domainBadge = new Label(project.getDomain());
+                    domainBadge.setStyle("-fx-background-color:#6c9bff22;-fx-text-fill:#6c9bff;" +
+                                         "-fx-padding:2 8;-fx-background-radius:8px;-fx-font-size:10px;");
+                    titleRow.getChildren().addAll(topicLbl, domainBadge);
+                } else {
+                    titleRow.getChildren().add(topicLbl);
+                }
+
+                // Owner + team size (exclude owner from member count)
+                String ownerName = project.getOwner() != null ? project.getOwner().getName() : "Unknown";
+                Long projOwnerId = project.getOwner() != null ? project.getOwner().getUserId() : null;
+                long collabCount = project.getMembers().stream()
+                    .filter(m -> projOwnerId == null || !m.getUserId().equals(projOwnerId))
+                    .count();
+                Label ownerLbl = new Label("👤 " + ownerName + " · 👥 Team: " + (collabCount + 1));
+                ownerLbl.setTextFill(Color.web("#8892a4"));
+                ownerLbl.setFont(Font.font("System", 12));
+
+                // Description
+                Label descLbl = new Label(project.getDescription() != null ? project.getDescription() : "No description provided.");
+                descLbl.setTextFill(Color.web("#a0aec0"));
+                descLbl.setFont(Font.font("System", 12));
+                descLbl.setWrapText(true);
+                descLbl.setMaxWidth(650);
+
+                // Request button
+                Label reqStatus = new Label("");
+                reqStatus.setFont(Font.font("System", 11));
+
+                Button requestBtn = new Button("🤝 Request to Join");
+                requestBtn.setStyle("-fx-background-color:#6c9bff;-fx-text-fill:white;-fx-font-weight:bold;" +
+                                    "-fx-background-radius:6px;-fx-cursor:hand;-fx-padding:6 16;");
+
+                requestBtn.setOnAction(e -> {
+                    try {
+                        collaborationService.sendRequest(
+                            currentUser.getUserId(),
+                            project.getOwner().getUserId(),
+                            project.getProjectId(),
+                            "I'd like to join your project: " + project.getTopic()
+                        );
+                        status(reqStatus, "✓ Request sent to " + project.getOwner().getName() + "!", true);
+                        requestBtn.setDisable(true);
+                        requestBtn.setText("Request Sent ✓");
+                    } catch (Exception ex) {
+                        status(reqStatus, "Error: " + ex.getMessage(), false);
+                    }
+                });
+
+                HBox actionRow = new HBox(10, requestBtn, reqStatus);
+                actionRow.setAlignment(Pos.CENTER_LEFT);
+
+                card.getChildren().addAll(titleRow, ownerLbl, descLbl, actionRow);
+                projectList.getChildren().add(card);
+            }
+        };
+
+        loadProjects.run();
+
+        filterGroup.selectedToggleProperty().addListener((obs, o, n) -> loadProjects.run());
+
+        ScrollPane scroll = new ScrollPane(projectList);
+        scroll.setFitToWidth(true);
+        scroll.setStyle("-fx-background-color:transparent;-fx-background:transparent;");
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+
+        pane.getChildren().add(scroll);
         return pane;
     }
 
@@ -455,8 +587,8 @@ public class CollaborationView {
                       "-fx-border-color:#2d3748;-fx-border-radius:10px;");
 
         String who = inbox
-            ? "From: " + req.getSender().getName() + " <" + req.getSender().getEmail() + "> (ID " + req.getSender().getUserId() + ")"
-            : "To: "   + req.getReceiver().getName() + " <" + req.getReceiver().getEmail() + "> (ID " + req.getReceiver().getUserId() + ")";
+            ? "From: " + req.getSender().getName() + " <" + req.getSender().getEmail() + ">"
+            : "To: "   + req.getReceiver().getName() + " <" + req.getReceiver().getEmail() + ">";
 
         Label fromLbl = new Label(who);
         fromLbl.setFont(Font.font("System", FontWeight.BOLD, 13));
@@ -478,7 +610,7 @@ public class CollaborationView {
         statusBadge.setTextFill(Color.web(statusColor));
 
         String proj = req.getProject() != null
-            ? "Linked project: " + req.getProject().getTopic() : "";
+            ? "📂 " + req.getProject().getTopic() : "";
         if (!proj.isEmpty()) {
             Label projLbl = new Label(proj);
             projLbl.setFont(Font.font("System", FontPosture.ITALIC, 11));
@@ -508,30 +640,6 @@ public class CollaborationView {
         Label l = new Label(text);
         l.setFont(Font.font("System", FontPosture.ITALIC, 13));
         l.setTextFill(Color.web("#4a5568")); l.setPadding(new Insets(16, 0, 0, 0)); return l;
-    }
-
-    private Label lbl(String text) {
-        Label l = new Label(text);
-        l.setFont(Font.font("System", FontWeight.BOLD, 11));
-        l.setTextFill(Color.web("#8892a4")); return l;
-    }
-
-    private String fieldStyle() {
-        return "-fx-background-color:#1a1f2e;-fx-text-fill:#e2e8f0;-fx-prompt-text-fill:#4a5568;" +
-               "-fx-border-color:#2d3748;-fx-border-radius:6px;-fx-background-radius:6px;" +
-               "-fx-pref-height:40px;-fx-font-size:13px;-fx-padding:0 12px;";
-    }
-
-    private TextField formField(String prompt) {
-        TextField f = new TextField(); f.setPromptText(prompt);
-        f.setStyle(fieldStyle()); f.setMaxWidth(Double.MAX_VALUE); return f;
-    }
-
-    private Button primaryBtn(String text) {
-        Button b = new Button(text);
-        b.setStyle("-fx-background-color:#6c9bff;-fx-text-fill:white;-fx-font-weight:bold;" +
-                   "-fx-pref-height:40px;-fx-pref-width:150px;-fx-background-radius:6px;-fx-cursor:hand;");
-        return b;
     }
 
     private ToggleButton tabBtn(String text, ToggleGroup g, boolean sel) {

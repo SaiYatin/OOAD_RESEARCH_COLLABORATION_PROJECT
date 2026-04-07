@@ -13,6 +13,7 @@ public interface ResearcherRepository extends JpaRepository<Researcher, Long> {
     Optional<Researcher> findByEmail(String email);
 
     @Query("SELECT r FROM Researcher r WHERE " +
-           "LOWER(r.researchInterests) LIKE LOWER(CONCAT('%', :keyword, '%'))")
+           "LOWER(r.researchInterests) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(r.name) LIKE LOWER(CONCAT('%', :keyword, '%'))")
     List<Researcher> findByKeyword(@Param("keyword") String keyword);
 }

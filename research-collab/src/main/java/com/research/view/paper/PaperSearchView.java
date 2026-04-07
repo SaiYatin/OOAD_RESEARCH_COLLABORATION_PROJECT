@@ -381,20 +381,78 @@ public class PaperSearchView {
     }
 
     private void showDetail(ResearchPaper p) {
-        Alert a = new Alert(Alert.AlertType.INFORMATION);
-        a.setTitle("Paper Details");
-        a.setHeaderText(p.getTitle());
-        a.setContentText(
-            "ID: "       + p.getPaperId()  + "\n" +
-            "Author: "   + p.getAuthor()   + "\n" +
-            "Domain: "   + p.getDomain()   + "\n" +
-            "Keywords: " + p.getKeywords() + "\n" +
-            "Status: "   + p.getStatus()   + "\n" +
-            "Link: "     + (p.getLink() != null ? p.getLink() : "—") + "\n\n" +
-            "Abstract:\n" + (p.getAbstractText() != null ? p.getAbstractText() : "—")
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Paper Details");
+        dialog.setHeaderText(p.getTitle());
+
+        VBox content = new VBox(8);
+        content.setPadding(new Insets(12));
+        content.setMinWidth(500);
+
+        content.getChildren().addAll(
+            detailLabel("ID:", String.valueOf(p.getPaperId())),
+            detailLabel("Author:", p.getAuthor()),
+            detailLabel("Domain:", p.getDomain()),
+            detailLabel("Keywords:", p.getKeywords()),
+            detailLabel("Status:", String.valueOf(p.getStatus())),
+            detailLabel("Link:", p.getLink() != null ? p.getLink() : "—")
         );
-        a.getDialogPane().setPrefWidth(500);
-        a.showAndWait();
+
+        Label abstractHeader = new Label("Abstract:");
+        abstractHeader.setFont(Font.font("System", FontWeight.BOLD, 12));
+        abstractHeader.setTextFill(Color.web("#333"));
+        Label abstractContent = new Label(p.getAbstractText() != null ? p.getAbstractText() : "—");
+        abstractContent.setWrapText(true);
+        abstractContent.setMaxWidth(480);
+        content.getChildren().addAll(abstractHeader, abstractContent);
+
+        // View Paper button
+        String link = p.getLink();
+        if (link != null && !link.isBlank()) {
+            Button viewBtn = new Button("📄 View Paper");
+            viewBtn.setStyle("-fx-background-color:#6c9bff;-fx-text-fill:white;-fx-font-weight:bold;" +
+                             "-fx-background-radius:6px;-fx-cursor:hand;-fx-padding:8 20;-fx-font-size:13px;");
+            Label viewStatus = new Label("");
+            viewStatus.setFont(Font.font("System", 11));
+            viewBtn.setOnAction(e -> {
+                try {
+                    java.io.File file = new java.io.File(link);
+                    if (file.exists()) {
+                        java.awt.Desktop.getDesktop().open(file);
+                        viewStatus.setTextFill(Color.web("#68d391"));
+                        viewStatus.setText("✓ Opened in default viewer");
+                    } else if (link.startsWith("http")) {
+                        java.awt.Desktop.getDesktop().browse(new java.net.URI(link));
+                        viewStatus.setTextFill(Color.web("#68d391"));
+                        viewStatus.setText("✓ Opened in browser");
+                    } else {
+                        viewStatus.setTextFill(Color.web("#fc8181"));
+                        viewStatus.setText("File not found: " + link);
+                    }
+                } catch (Exception ex) {
+                    viewStatus.setTextFill(Color.web("#fc8181"));
+                    viewStatus.setText("Error: " + ex.getMessage());
+                }
+            });
+            HBox viewRow = new HBox(10, viewBtn, viewStatus);
+            viewRow.setAlignment(Pos.CENTER_LEFT);
+            viewRow.setPadding(new Insets(8, 0, 0, 0));
+            content.getChildren().add(viewRow);
+        }
+
+        dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.OK);
+        dialog.getDialogPane().setPrefWidth(540);
+        dialog.showAndWait();
+    }
+
+    private HBox detailLabel(String label, String value) {
+        Label l = new Label(label);
+        l.setFont(Font.font("System", FontWeight.BOLD, 12));
+        l.setMinWidth(80);
+        Label v = new Label(value != null ? value : "—");
+        v.setWrapText(true);
+        return new HBox(8, l, v);
     }
 
     // ══ Style helpers ═════════════════════════════════════════════════

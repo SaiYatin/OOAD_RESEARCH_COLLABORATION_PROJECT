@@ -18,17 +18,23 @@ public class Researcher extends User {
 
     private String department;
 
-    @OneToMany(mappedBy = "researcher", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "researcher", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private List<ResearchPaper> papers = new ArrayList<>();
 
-    @OneToMany(mappedBy = "owner", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "owner", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private List<ResearchProject> projects = new ArrayList<>();
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "researcher_followed_keywords",
                      joinColumns = @JoinColumn(name = "researcher_id"))
     @Column(name = "keyword")
     private List<String> followedKeywords = new ArrayList<>();
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "researcher_interested_domains",
+                     joinColumns = @JoinColumn(name = "researcher_id"))
+    @Column(name = "domain")
+    private List<String> interestedDomains = new ArrayList<>();
 
     @Override
     public void register() {
@@ -47,6 +53,8 @@ public class Researcher extends User {
     public List<ResearchPaper> getPapers() { return papers; }
     public List<ResearchProject> getProjects() { return projects; }
     public List<String> getFollowedKeywords() { return followedKeywords; }
+    public List<String> getInterestedDomains() { return interestedDomains; }
+    public void setInterestedDomains(List<String> interestedDomains) { this.interestedDomains = interestedDomains; }
 
     // ── Setters ──────────────────────────────────────────────
     public void setResearchInterests(String researchInterests) { this.researchInterests = researchInterests; }

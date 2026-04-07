@@ -71,6 +71,6 @@ public abstract class User {
     public void setRole(UserRole role) { this.role = role; }
 
     public enum UserRole {
-        ADMIN, REVIEWER, RESEARCHER, VISITOR, COLLABORATOR
+        ADMIN, REVIEWER, RESEARCHER, VISITOR
     }
 }

@@ -112,7 +112,7 @@ public class LoginView {
         Label roleLabel = new Label("Role");
         styleLabel(roleLabel);
         ComboBox<String> roleCombo = new ComboBox<>();
-        roleCombo.getItems().addAll("RESEARCHER", "REVIEWER", "COLLABORATOR", "VISITOR");
+        roleCombo.getItems().addAll("RESEARCHER", "REVIEWER", "VISITOR");
         roleCombo.setValue("RESEARCHER");
         styleComboBox(roleCombo);
         roleLabel.setVisible(false);

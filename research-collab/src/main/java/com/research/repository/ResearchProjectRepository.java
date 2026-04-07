@@ -14,4 +14,14 @@ public interface ResearchProjectRepository extends JpaRepository<ResearchProject
 
     @Query("SELECT p FROM ResearchProject p JOIN p.members m WHERE m.userId = :userId")
     List<ResearchProject> findByMemberId(@Param("userId") Long userId);
+
+    List<ResearchProject> findByLookingForCollaboratorsTrue();
+
+    @Query("SELECT p FROM ResearchProject p WHERE p.lookingForCollaborators = true AND p.domain IN :domains")
+    List<ResearchProject> findByLookingForCollaboratorsTrueAndDomainIn(@Param("domains") List<String> domains);
+
+    @Query("SELECT DISTINCT p.domain FROM ResearchProject p WHERE p.domain IS NOT NULL")
+    List<String> findAllDomains();
+
+    List<ResearchProject> findByStatus(ResearchProject.ProjectStatus status);
 }

@@ -22,11 +22,18 @@ public class ResearchProject {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    private String domain;
+
+    @Enumerated(EnumType.STRING)
+    private ProjectStatus status = ProjectStatus.ACTIVE;
+
+    private boolean lookingForCollaborators = false;
+
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "owner_id")
     private Researcher owner;
 
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
         name = "project_members",
         joinColumns = @JoinColumn(name = "project_id"),
@@ -52,6 +59,9 @@ public class ResearchProject {
     public Long getProjectId() { return projectId; }
     public String getTopic() { return topic; }
     public String getDescription() { return description; }
+    public String getDomain() { return domain; }
+    public ProjectStatus getStatus() { return status; }
+    public boolean isLookingForCollaborators() { return lookingForCollaborators; }
     public Researcher getOwner() { return owner; }
     public List<User> getMembers() { return members; }
     public LocalDateTime getCreatedAt() { return createdAt; }
@@ -61,6 +71,9 @@ public class ResearchProject {
     public void setProjectId(Long projectId) { this.projectId = projectId; }
     public void setTopic(String topic) { this.topic = topic; }
     public void setDescription(String description) { this.description = description; }
+    public void setDomain(String domain) { this.domain = domain; }
+    public void setStatus(ProjectStatus status) { this.status = status; }
+    public void setLookingForCollaborators(boolean lookingForCollaborators) { this.lookingForCollaborators = lookingForCollaborators; }
     public void setOwner(Researcher owner) { this.owner = owner; }
     public void setMembers(List<User> members) { this.members = members; }
 
@@ -74,5 +87,9 @@ public class ResearchProject {
     public void uploadData(String dataDescription) {
         this.description = (this.description == null ? "" : this.description)
                 + "\n[Data] " + dataDescription;
+    }
+
+    public enum ProjectStatus {
+        ACTIVE, COMPLETED, ARCHIVED
     }
 }

@@ -80,6 +80,11 @@ public class ExpertService {
         return expertRepository.findByResearchAreasContaining(keyword);
     }
 
+    @Transactional
+    public Expert saveExpert(Expert expert) {
+        return expertRepository.save(expert);
+    }
+
     public List<String> getAllDomains() {
         return expertRepository.findAllDomains();
     }

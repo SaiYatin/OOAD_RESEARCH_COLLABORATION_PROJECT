@@ -13,7 +13,8 @@ public interface ExpertRepository extends JpaRepository<Expert, Long> {
     List<Expert> findByActiveTrue();
 
     @Query("SELECT e FROM Expert e WHERE " +
-           "LOWER(e.researchAreas) LIKE LOWER(CONCAT('%', :keyword, '%'))")
+           "LOWER(e.researchAreas) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(e.name) LIKE LOWER(CONCAT('%', :keyword, '%'))")
     List<Expert> findByResearchAreasContaining(@Param("keyword") String keyword);
 
     Optional<Expert> findByEmail(String email);
