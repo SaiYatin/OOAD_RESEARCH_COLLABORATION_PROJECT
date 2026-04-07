@@ -3,62 +3,18 @@ package com.research.pattern;
 import com.research.model.ResearchPaper;
 import com.research.model.Expert;
 import org.springframework.stereotype.Component;
-import java.util.ArrayList;
 import java.util.List;
 
 // ══════════════════════════════════════════════════════════════
-//  BEHAVIORAL PATTERN 1: OBSERVER
-//  When a new ResearchPaper is added/published, all subscribers
-//  following that research domain get notified via email.
-//  Applied to: Email notification workflow (n8n integration).
+//  BEHAVIORAL PATTERNS - package-private implementations
+//  Public classes split into: ResearchUpdateObserver.java,
+//  PaperPublicationSubject.java, RecommendationContext.java
 // ══════════════════════════════════════════════════════════════
 
 /**
- * Observer interface - any listener that reacts to paper events.
- */
-public interface ResearchUpdateObserver {
-    void onNewPaper(ResearchPaper paper, String matchedKeyword);
-}
-
-/**
- * Observable subject - the paper publication event source.
- * Maintains a list of observers and fires events.
- *
- * HOW APPLIED: When a paper is published or added via n8n workflow,
- * PaperPublicationSubject notifies all registered subscribers whose
- * followed keywords match the paper's domain/keywords.
- */
-@Component
-class PaperPublicationSubject {
-
-    private final List<ResearchUpdateObserver> observers = new ArrayList<>();
-
-    public void addObserver(ResearchUpdateObserver observer) {
-        observers.add(observer);
-    }
-
-    public void removeObserver(ResearchUpdateObserver observer) {
-        observers.remove(observer);
-    }
-
-    /**
-     * Called when a new paper is added/published.
-     * Each observer gets notified with the matched keyword.
-     */
-    public void notifyObservers(ResearchPaper paper, List<String> paperKeywords) {
-        for (ResearchUpdateObserver observer : observers) {
-            for (String keyword : paperKeywords) {
-                observer.onNewPaper(paper, keyword);
-            }
-        }
-    }
-}
-
-/**
  * Concrete Observer - sends email via n8n webhook.
- * This triggers the n8n Email Notification Workflow.
+ * Not a Spring bean - instantiated per subscriber by the service layer.
  */
-@Component
 class EmailNotificationObserver implements ResearchUpdateObserver {
 
     private final N8nWebhookCaller webhookCaller;
@@ -75,7 +31,6 @@ class EmailNotificationObserver implements ResearchUpdateObserver {
 
     @Override
     public void onNewPaper(ResearchPaper paper, String matchedKeyword) {
-        // Only notify if this subscriber follows this keyword
         boolean follows = followedKeywords.stream()
             .anyMatch(k -> k.equalsIgnoreCase(matchedKeyword)
                         || matchedKeyword.toLowerCase().contains(k.toLowerCase()));
@@ -89,7 +44,6 @@ class EmailNotificationObserver implements ResearchUpdateObserver {
 
 /**
  * N8n Webhook Caller - calls the n8n Email Notification workflow.
- * Used by Observer to actually fire the email via n8n.
  */
 @Component
 class N8nWebhookCaller {
@@ -105,7 +59,6 @@ class N8nWebhookCaller {
     public void triggerEmailNotification(String recipientEmail,
                                           ResearchPaper paper,
                                           String matchedKeyword) {
-        // Build JSON payload for n8n webhook
         String payload = String.format("""
             {
               "recipientEmail": "%s",
@@ -124,8 +77,8 @@ class N8nWebhookCaller {
             paper.getAuthor() != null ? paper.getAuthor() : ""
         );
 
-        // Send HTTP POST to n8n webhook (non-blocking)
-        Thread.startVirtualThread(() -> {
+        // Use Thread for Java 17 compatibility (startVirtualThread requires Java 21)
+        new Thread(() -> {
             try {
                 java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
                 java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
@@ -137,16 +90,13 @@ class N8nWebhookCaller {
             } catch (Exception e) {
                 System.err.println("n8n webhook call failed: " + e.getMessage());
             }
-        });
+        }).start();
     }
 }
 
 
 // ══════════════════════════════════════════════════════════════
 //  BEHAVIORAL PATTERN 2: STRATEGY
-//  RecommendationStrategy allows swapping the recommendation
-//  algorithm at runtime (keyword-based vs AI-based vs hybrid).
-//  Applied to: Expert recommendation feature.
 // ══════════════════════════════════════════════════════════════
 
 /**
@@ -154,13 +104,11 @@ class N8nWebhookCaller {
  */
 interface RecommendationStrategy {
     List<Expert> recommend(String query, List<Expert> experts, int topN);
-
     String strategyName();
 }
 
 /**
  * Concrete Strategy 1 - Keyword matching (local, fast).
- * Default strategy when n8n AI is unavailable.
  */
 @Component
 class KeywordMatchingStrategy implements RecommendationStrategy {
@@ -168,7 +116,7 @@ class KeywordMatchingStrategy implements RecommendationStrategy {
     @Override
     public List<Expert> recommend(String query, List<Expert> experts, int topN) {
         return experts.stream()
-            .filter(Expert::isActive)
+            .filter(e -> e.isActive())
             .filter(e -> e.scoreAgainst(query) > 0)
             .sorted((a, b) -> Double.compare(b.scoreAgainst(query), a.scoreAgainst(query)))
             .limit(topN)
@@ -181,7 +129,6 @@ class KeywordMatchingStrategy implements RecommendationStrategy {
 
 /**
  * Concrete Strategy 2 - AI-powered via n8n Search Agent webhook.
- * Calls the n8n Search Agent workflow for Gemini-powered results.
  */
 @Component
 class AIPoweredStrategy implements RecommendationStrategy {
@@ -194,8 +141,6 @@ class AIPoweredStrategy implements RecommendationStrategy {
 
     @Override
     public List<Expert> recommend(String query, List<Expert> experts, int topN) {
-        // Falls back to keyword matching if AI is unavailable
-        // In full impl: calls n8n Search Agent, parses returned JSON experts
         return new KeywordMatchingStrategy().recommend(query, experts, topN);
     }
 
@@ -211,40 +156,11 @@ class HybridStrategy implements RecommendationStrategy {
 
     @Override
     public List<Expert> recommend(String query, List<Expert> experts, int topN) {
-        // Step 1: Keyword pre-filter to 30 candidates
         List<Expert> candidates = new KeywordMatchingStrategy()
             .recommend(query, experts, 30);
-        // Step 2: AI re-rank (stub - delegates to keyword score for now)
         return candidates.stream().limit(topN).toList();
     }
 
     @Override
     public String strategyName() { return "Hybrid (Keyword + AI Re-rank)"; }
-}
-
-/**
- * Strategy Context - holds and executes the current strategy.
- * HOW APPLIED: The UI lets the user pick a recommendation mode,
- * and this context switches the algorithm at runtime.
- */
-@Component
-class RecommendationContext {
-
-    private RecommendationStrategy strategy;
-
-    public RecommendationContext(KeywordMatchingStrategy defaultStrategy) {
-        this.strategy = defaultStrategy;
-    }
-
-    public void setStrategy(RecommendationStrategy strategy) {
-        this.strategy = strategy;
-    }
-
-    public List<Expert> execute(String query, List<Expert> experts, int topN) {
-        return strategy.recommend(query, experts, topN);
-    }
-
-    public String currentStrategyName() {
-        return strategy.strategyName();
-    }
 }

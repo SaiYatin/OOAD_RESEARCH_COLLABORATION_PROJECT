@@ -1,20 +1,14 @@
 package com.research.model;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Researcher - can create projects, upload papers, collaborate.
- * Maps to Researcher class in Class Diagram.
- * Design Principle: SRP - handles only researcher-specific behaviour.
  */
 @Entity
 @DiscriminatorValue("RESEARCHER")
-@Getter
-@Setter
 public class Researcher extends User {
 
     @Column(columnDefinition = "TEXT")
@@ -30,7 +24,6 @@ public class Researcher extends User {
     @OneToMany(mappedBy = "owner", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<ResearchProject> projects = new ArrayList<>();
 
-    // Tracks research threads the researcher follows (for email notifications)
     @ElementCollection
     @CollectionTable(name = "researcher_followed_keywords",
                      joinColumns = @JoinColumn(name = "researcher_id"))
@@ -47,7 +40,20 @@ public class Researcher extends User {
         return this.getEmail().equals(email) && this.getPassword().equals(password);
     }
 
-    // Class diagram methods
+    // ── Getters ──────────────────────────────────────────────
+    public String getResearchInterests() { return researchInterests; }
+    public String getInstitution() { return institution; }
+    public String getDepartment() { return department; }
+    public List<ResearchPaper> getPapers() { return papers; }
+    public List<ResearchProject> getProjects() { return projects; }
+    public List<String> getFollowedKeywords() { return followedKeywords; }
+
+    // ── Setters ──────────────────────────────────────────────
+    public void setResearchInterests(String researchInterests) { this.researchInterests = researchInterests; }
+    public void setInstitution(String institution) { this.institution = institution; }
+    public void setDepartment(String department) { this.department = department; }
+
+    // ── Business methods ─────────────────────────────────────
     public ResearchProject createResearchProject(String topic) {
         ResearchProject project = new ResearchProject();
         project.setTopic(topic);

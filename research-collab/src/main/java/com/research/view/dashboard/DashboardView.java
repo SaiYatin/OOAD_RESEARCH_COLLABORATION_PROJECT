@@ -76,11 +76,11 @@ public class DashboardView {
                            "-fx-border-radius: 4px; -fx-padding: 4 10;");
         logoutBtn.setOnAction(e -> {
             authService.logout();
-            // Return to login - rebuild LoginView
-            stage.setWidth(900);
-            stage.setHeight(650);
-            stage.setResizable(false);
-            // Re-launch login (in full impl would re-show LoginView)
+            // Return to login screen
+            com.research.view.auth.LoginView loginView =
+                com.research.ResearchCollaborationApp.getSpringContext()
+                    .getBean(com.research.view.auth.LoginView.class);
+            loginView.show(stage);
         });
 
         topBar.getChildren().addAll(logo, spacer, userBadge,

@@ -1,21 +1,15 @@
 package com.research.model;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * ResearchPaper - central entity of the system.
- * Maps to ResearchPaper class in Class Diagram.
- * Fields: paperId, title, author, link, status
  */
 @Entity
 @Table(name = "research_papers")
-@Getter
-@Setter
 public class ResearchPaper {
 
     @Id
@@ -33,9 +27,9 @@ public class ResearchPaper {
     private String link;
 
     @Column(columnDefinition = "TEXT")
-    private String keywords;   // comma-separated - drives Observer notifications
+    private String keywords;
 
-    private String domain;     // e.g. "Machine Learning", "NLP", "Robotics"
+    private String domain;
 
     @Enumerated(EnumType.STRING)
     private PaperStatus status = PaperStatus.DRAFT;
@@ -52,7 +46,6 @@ public class ResearchPaper {
 
     private LocalDateTime updatedAt;
 
-    // Linked collaboration requests
     @OneToMany(mappedBy = "paper", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<CollaborationRequest> collaborationRequests = new ArrayList<>();
 
@@ -67,7 +60,34 @@ public class ResearchPaper {
         updatedAt = LocalDateTime.now();
     }
 
-    // Class diagram methods
+    // ── Getters ──────────────────────────────────────────────
+    public Long getPaperId() { return paperId; }
+    public String getTitle() { return title; }
+    public String getAuthor() { return author; }
+    public String getAbstractText() { return abstractText; }
+    public String getLink() { return link; }
+    public String getKeywords() { return keywords; }
+    public String getDomain() { return domain; }
+    public PaperStatus getStatus() { return status; }
+    public String getReviewNotes() { return reviewNotes; }
+    public Researcher getResearcher() { return researcher; }
+    public LocalDateTime getUploadedAt() { return uploadedAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public List<CollaborationRequest> getCollaborationRequests() { return collaborationRequests; }
+
+    // ── Setters ──────────────────────────────────────────────
+    public void setPaperId(Long paperId) { this.paperId = paperId; }
+    public void setTitle(String title) { this.title = title; }
+    public void setAuthor(String author) { this.author = author; }
+    public void setAbstractText(String abstractText) { this.abstractText = abstractText; }
+    public void setLink(String link) { this.link = link; }
+    public void setKeywords(String keywords) { this.keywords = keywords; }
+    public void setDomain(String domain) { this.domain = domain; }
+    public void setStatus(PaperStatus status) { this.status = status; }
+    public void setReviewNotes(String reviewNotes) { this.reviewNotes = reviewNotes; }
+    public void setResearcher(Researcher researcher) { this.researcher = researcher; }
+
+    // ── Business methods ─────────────────────────────────────
     public String getDetails() {
         return String.format("Title: %s | Author: %s | Domain: %s | Status: %s",
                 title, author, domain, status);

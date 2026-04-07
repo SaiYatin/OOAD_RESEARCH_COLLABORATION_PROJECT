@@ -3,22 +3,15 @@ package com.research.model;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import lombok.Getter;
-import lombok.Setter;
 import java.time.LocalDateTime;
 
 /**
  * Abstract User - base class for all user types.
- * Design Principle: LSP (Liskov Substitution) - all subtypes substitutable for User.
- * Design Principle: OCP (Open/Closed) - extend via subclasses, don't modify base.
- * Maps to <<Abstract>> User in Class Diagram.
  */
 @Entity
 @Table(name = "users")
 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
 @DiscriminatorColumn(name = "user_type", discriminatorType = DiscriminatorType.STRING)
-@Getter
-@Setter
 public abstract class User {
 
     @Id
@@ -57,10 +50,25 @@ public abstract class User {
         updatedAt = LocalDateTime.now();
     }
 
-    // Defined in class diagram
+    // ── Abstract methods ─────────────────────────────────────
     public abstract void register();
-
     public abstract boolean login(String email, String password);
+
+    // ── Getters ──────────────────────────────────────────────
+    public Long getUserId() { return userId; }
+    public String getName() { return name; }
+    public String getEmail() { return email; }
+    public String getPassword() { return password; }
+    public UserRole getRole() { return role; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+
+    // ── Setters ──────────────────────────────────────────────
+    public void setUserId(Long userId) { this.userId = userId; }
+    public void setName(String name) { this.name = name; }
+    public void setEmail(String email) { this.email = email; }
+    public void setPassword(String password) { this.password = password; }
+    public void setRole(UserRole role) { this.role = role; }
 
     public enum UserRole {
         ADMIN, REVIEWER, RESEARCHER, VISITOR, COLLABORATOR

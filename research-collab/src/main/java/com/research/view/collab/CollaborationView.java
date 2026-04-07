@@ -310,7 +310,8 @@ public class CollaborationView {
         chipBox.setPadding(new Insets(10));
         chipBox.setStyle("-fx-background-color:#1a1f2e;-fx-background-radius:8px;");
 
-        Runnable refreshChips = () -> {
+        final Runnable[] refreshChips = new Runnable[1];
+        refreshChips[0] = () -> {
             chipBox.getChildren().clear();
             if (!(user instanceof Researcher researcher)
                     || researcher.getFollowedKeywords().isEmpty()) {
@@ -333,7 +334,7 @@ public class CollaborationView {
                     removeBtn.setOnAction(e -> {
                         ((Researcher) user).getFollowedKeywords().remove(kwFinal);
                         userRepository.save(user);
-                        refreshChips.run();
+                        refreshChips[0].run();
                     });
                     chip.getChildren().addAll(chipLbl, removeBtn);
                     chipBox.getChildren().add(chip);
@@ -341,7 +342,7 @@ public class CollaborationView {
             }
         };
 
-        refreshChips.run();
+        refreshChips[0].run();
 
         addBtn.setOnAction(e -> {
             String kw = kwField.getText().trim();
@@ -355,7 +356,7 @@ public class CollaborationView {
             }
             kwField.clear();
             status(addStatus, "✓ Now following \"" + kw + "\". Email alert fires via n8n when a matching paper is published.", true);
-            refreshChips.run();
+            refreshChips[0].run();
         });
 
         // How it works box

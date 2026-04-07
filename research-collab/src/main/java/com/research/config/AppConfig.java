@@ -58,14 +58,31 @@ public class AppConfig {
             }
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(csvUrl.openStream()))) {
+                String headerLine = reader.readLine(); // skip header
+                if (headerLine == null) return rows;
+
+                StringBuilder currentLine = new StringBuilder();
+                boolean insideQuote = false;
                 String line;
-                boolean firstLine = true;
+
                 while ((line = reader.readLine()) != null) {
-                    if (firstLine) { firstLine = false; continue; } // skip header
-                    // Simple CSV split - handles quoted fields with commas
-                    String[] cols = splitCsvLine(line);
-                    if (cols.length >= 5) {
-                        rows.add(cols);
+                    line = line.replace("\r", "");
+                    if (!insideQuote) {
+                        currentLine = new StringBuilder(line);
+                    } else {
+                        currentLine.append(" ").append(line);
+                    }
+                    int quoteCount = 0;
+                    for (char c : currentLine.toString().toCharArray()) {
+                        if (c == '"') quoteCount++;
+                    }
+                    insideQuote = (quoteCount % 2 != 0);
+
+                    if (!insideQuote) {
+                        String[] cols = splitCsvLine(currentLine.toString());
+                        if (cols.length >= 5 && !cols[0].isBlank()) {
+                            rows.add(cols);
+                        }
                     }
                 }
             }
