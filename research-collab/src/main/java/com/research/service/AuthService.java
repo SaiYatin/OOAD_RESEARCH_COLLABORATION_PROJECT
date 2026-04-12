@@ -40,13 +40,18 @@ public class AuthService {
     @Transactional
     public User register(String name, String email,
                          String password, User.UserRole role) {
+        System.out.println(">>> [AuthService] register() called for email: " + email + " with role: " + role);
         if (userRepository.existsByEmail(email)) {
+            System.err.println(">>> [AuthService] Registration failed - email already exists.");
             throw new IllegalArgumentException("Email already registered: " + email);
         }
         // Factory creates correct subclass (Researcher/Admin/etc.)
         User user = userFactory.createUser(name, email,
                 passwordEncoder.encode(password), role);
-        return userRepository.save(user);
+        System.out.println(">>> [AuthService] User created via factory, saving to database...");
+        User savedUser = userRepository.save(user);
+        System.out.println(">>> [AuthService] Registration successful for user: " + savedUser.getEmail());
+        return savedUser;
     }
 
     /**
@@ -54,19 +59,24 @@ public class AuthService {
      * Returns the authenticated User or throws on failure.
      */
     public User login(String email, String password) {
+        System.out.println(">>> [AuthService] login() attempt for email: " + email);
         Optional<User> userOpt = userRepository.findByEmail(email);
         if (userOpt.isEmpty()) {
+            System.err.println(">>> [AuthService] Login failed - email not found.");
             throw new IllegalArgumentException("No account found for: " + email);
         }
         User user = userOpt.get();
         if (!passwordEncoder.matches(password, user.getPassword())) {
+            System.err.println(">>> [AuthService] Login failed - incorrect password.");
             throw new IllegalArgumentException("Incorrect password.");
         }
+        System.out.println(">>> [AuthService] Password matched. User logged in successfully.");
         currentUser = user;
         return user;
     }
 
     public void logout() {
+        System.out.println(">>> [AuthService] logout() called. Clearing current user session.");
         currentUser = null;
     }
 

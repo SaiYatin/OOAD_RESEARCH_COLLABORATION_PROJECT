@@ -43,10 +43,11 @@ public class RecommendationService {
 
     /**
      * Strategy-based recommendation with mode selection.
-     * Member 4's UI lets user pick the strategy (keyword/AI/hybrid).
+     * Member 4's UI lets user pick the strategy (keyword/ai/hybrid).
      */
     public List<Expert> recommendWithStrategy(String query, String strategyMode) {
         List<Expert> allExperts = expertRepository.findByActiveTrue();
+        recommendationContext.setStrategyByMode(strategyMode);
         return recommendationContext.execute(query, allExperts, 10);
     }
 

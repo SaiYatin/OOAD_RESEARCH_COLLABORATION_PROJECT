@@ -24,10 +24,12 @@ public class ExpertService {
     }
 
     public List<Expert> getAllActiveExperts() {
+        System.out.println(">>> [ExpertService] getAllActiveExperts() called");
         return expertRepository.findByActiveTrue();
     }
 
     public Expert getExpertById(Long id) {
+        System.out.println(">>> [ExpertService] getExpertById() called for ID: " + id);
         return expertRepository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("Expert not found: " + id));
     }
@@ -40,6 +42,7 @@ public class ExpertService {
     public Expert importFromCsvRow(String name, String designation,
                                     String email, String phone,
                                     String researchAreas) {
+        System.out.println(">>> [ExpertService] importFromCsvRow() called for: " + name + " (" + email + ")");
         // Upsert - update if email exists, insert if not
         Expert expert = expertRepository.findByEmail(email)
                                         .orElse(new Expert());
@@ -53,7 +56,7 @@ public class ExpertService {
 
         // Extract domain from research areas
         expert.setDomain(inferDomain(researchAreas));
-
+        System.out.println(">>> [ExpertService] Saving imported expert: " + expert.getName() + " under domain: " + expert.getDomain());
         return expertRepository.save(expert);
     }
 
@@ -63,6 +66,7 @@ public class ExpertService {
      */
     @Transactional
     public Expert updateResearchProfile(Long expertId, String newResearchAreas) {
+        System.out.println(">>> [ExpertService] updateResearchProfile() called for Expert ID: " + expertId);
         Expert expert = getExpertById(expertId);
         expert.updateProfile(newResearchAreas);
         expert.setDomain(inferDomain(newResearchAreas));
@@ -94,6 +98,7 @@ public class ExpertService {
      */
     @Transactional
     public int bulkImportFromCsv(List<String[]> csvRows) {
+        System.out.println(">>> [ExpertService] bulkImportFromCsv() called with " + csvRows.size() + " rows.");
         int count = 0;
         for (String[] row : csvRows) {
             if (row.length >= 5) {
@@ -106,6 +111,7 @@ public class ExpertService {
                 }
             }
         }
+        System.out.println(">>> [ExpertService] Bulk import completed. Successfully imported " + count + " experts.");
         return count;
     }
 

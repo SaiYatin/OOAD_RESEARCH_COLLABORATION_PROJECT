@@ -30,7 +30,8 @@ public class AppConfig {
      * This bridges the n8n University Research Agent output into the Java app.
      * Skip rows already in DB (upsert by email in ExpertService).
      */
-    @Bean
+    // @Bean  // DISABLING old Java seeder since Python script loaded the rich V2 dataset
+
     public CommandLineRunner seedExpertData(ExpertService expertService) {
         return args -> {
             if (expertService.getAllActiveExperts().size() > 5) {

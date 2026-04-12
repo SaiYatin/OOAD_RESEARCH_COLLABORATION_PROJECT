@@ -30,6 +30,7 @@ public class LoginView {
     }
 
     public void show(Stage stage) {
+        System.out.println(">>> [LoginView] show() called - initializing login screen.");
         stage.setTitle("Research Collaboration System — Login");
         stage.setWidth(900);
         stage.setHeight(650);
@@ -122,21 +123,7 @@ public class LoginView {
 
         // Action button
         Button actionBtn = new Button("Login");
-        actionBtn.setStyle(
-            "-fx-background-color: #6c9bff; -fx-text-fill: white; " +
-            "-fx-font-size: 15px; -fx-font-weight: bold; " +
-            "-fx-pref-width: 340px; -fx-pref-height: 48px; " +
-            "-fx-background-radius: 8px; -fx-cursor: hand;");
-        actionBtn.setOnMouseEntered(e -> actionBtn.setStyle(
-            "-fx-background-color: #4f7fff; -fx-text-fill: white; " +
-            "-fx-font-size: 15px; -fx-font-weight: bold; " +
-            "-fx-pref-width: 340px; -fx-pref-height: 48px; " +
-            "-fx-background-radius: 8px; -fx-cursor: hand;"));
-        actionBtn.setOnMouseExited(e -> actionBtn.setStyle(
-            "-fx-background-color: #6c9bff; -fx-text-fill: white; " +
-            "-fx-font-size: 15px; -fx-font-weight: bold; " +
-            "-fx-pref-width: 340px; -fx-pref-height: 48px; " +
-            "-fx-background-radius: 8px; -fx-cursor: hand;"));
+        // Style handles below due to width sizing in GridPane
 
         Label statusLabel = new Label("");
         statusLabel.setFont(Font.font("System", 12));
@@ -161,6 +148,7 @@ public class LoginView {
 
         // Login / Register action
         actionBtn.setOnAction(e -> {
+            System.out.println(">>> [LoginView] actionBtn clicked. Mode isRegister: " + (modeGroup.getSelectedToggle() == registerBtn));
             statusLabel.setTextFill(Color.web("#ff6b6b"));
             String email = emailField.getText().trim();
             String password = passwordField.getText().trim();
@@ -176,16 +164,20 @@ public class LoginView {
                     String name = nameField.getText().trim();
                     String roleStr = roleCombo.getValue();
                     if (name.isEmpty()) {
+                        System.out.println(">>> [LoginView] Registration failed - empty name.");
                         statusLabel.setText("Please enter your name.");
                         return;
                     }
+                    System.out.println(">>> [LoginView] Attempting registration for email: " + email + ", role: " + roleStr);
                     User.UserRole role = User.UserRole.valueOf(roleStr);
                     authService.register(name, email, password, role);
                     statusLabel.setTextFill(Color.web("#68d391"));
                     statusLabel.setText("Account created! Please login.");
                     modeGroup.selectToggle(loginBtn);
                 } else {
+                    System.out.println(">>> [LoginView] Attempting login for email: " + email);
                     User user = authService.login(email, password);
+                    System.out.println(">>> [LoginView] Login successful. Redirecting to Dashboard for user: " + user.getName());
                     statusLabel.setTextFill(Color.web("#68d391"));
                     statusLabel.setText("Welcome, " + user.getName() + "!");
                     dashboardView.show(stage, user);
@@ -195,14 +187,56 @@ public class LoginView {
             }
         });
 
-        rightPanel.getChildren().addAll(
-            tabRow,
-            nameLabel, nameField,
-            emailLabel, emailField,
-            passwordLabel, passwordField,
-            roleLabel, roleCombo,
-            actionBtn, statusLabel
-        );
+        GridPane formGrid = new GridPane();
+        formGrid.setAlignment(Pos.CENTER);
+        formGrid.setHgap(15);
+        formGrid.setVgap(20);
+
+        ColumnConstraints col1 = new ColumnConstraints();
+        col1.setPrefWidth(90);
+        col1.setHalignment(javafx.geometry.HPos.RIGHT);
+
+        ColumnConstraints col2 = new ColumnConstraints();
+        col2.setPrefWidth(250);
+        col2.setHalignment(javafx.geometry.HPos.LEFT);
+
+        formGrid.getColumnConstraints().addAll(col1, col2);
+
+        formGrid.add(tabRow, 0, 0, 2, 1);
+        GridPane.setHalignment(tabRow, javafx.geometry.HPos.CENTER);
+
+        formGrid.add(nameLabel, 0, 1);
+        formGrid.add(nameField, 1, 1);
+        
+        formGrid.add(emailLabel, 0, 2);
+        formGrid.add(emailField, 1, 2);
+
+        formGrid.add(passwordLabel, 0, 3);
+        formGrid.add(passwordField, 1, 3);
+
+        formGrid.add(roleLabel, 0, 4);
+        formGrid.add(roleCombo, 1, 4);
+
+        actionBtn.setStyle(
+            "-fx-background-color: #6c9bff; -fx-text-fill: white; " +
+            "-fx-font-size: 15px; -fx-font-weight: bold; " +
+            "-fx-pref-width: 250px; -fx-pref-height: 48px; " +
+            "-fx-background-radius: 8px; -fx-cursor: hand;");
+        actionBtn.setOnMouseEntered(e -> actionBtn.setStyle(
+            "-fx-background-color: #4f7fff; -fx-text-fill: white; " +
+            "-fx-font-size: 15px; -fx-font-weight: bold; " +
+            "-fx-pref-width: 250px; -fx-pref-height: 48px; " +
+            "-fx-background-radius: 8px; -fx-cursor: hand;"));
+        actionBtn.setOnMouseExited(e -> actionBtn.setStyle(
+            "-fx-background-color: #6c9bff; -fx-text-fill: white; " +
+            "-fx-font-size: 15px; -fx-font-weight: bold; " +
+            "-fx-pref-width: 250px; -fx-pref-height: 48px; " +
+            "-fx-background-radius: 8px; -fx-cursor: hand;"));
+
+        formGrid.add(actionBtn, 1, 5);
+        formGrid.add(statusLabel, 1, 6);
+
+        rightPanel.getChildren().add(formGrid);
 
         root.setLeft(leftPanel);
         root.setCenter(rightPanel);
@@ -239,14 +273,14 @@ public class LoginView {
             "-fx-background-color: #1a1f2e; -fx-text-fill: #e2e8f0; " +
             "-fx-prompt-text-fill: #4a5568; -fx-border-color: #2d3748; " +
             "-fx-border-radius: 6px; -fx-background-radius: 6px; " +
-            "-fx-pref-width: 340px; -fx-pref-height: 42px; -fx-padding: 0 12px;");
+            "-fx-pref-width: 250px; -fx-pref-height: 42px; -fx-padding: 0 12px;");
     }
 
     private void styleComboBox(ComboBox<?> combo) {
         combo.setStyle(
             "-fx-background-color: #1a1f2e; -fx-text-fill: #e2e8f0; " +
             "-fx-border-color: #2d3748; -fx-border-radius: 6px; " +
-            "-fx-background-radius: 6px; -fx-pref-width: 340px; -fx-pref-height: 42px;");
+            "-fx-background-radius: 6px; -fx-pref-width: 250px; -fx-pref-height: 42px;");
     }
 
     private void styleToggleButton(ToggleButton btn, boolean isLeft) {

@@ -2,6 +2,7 @@ package com.research.pattern;
 
 import com.research.model.Expert;
 import org.springframework.stereotype.Component;
+import org.springframework.context.ApplicationContext;
 import java.util.List;
 
 /**
@@ -11,13 +12,19 @@ import java.util.List;
 public class RecommendationContext {
 
     private RecommendationStrategy strategy;
+    private final ApplicationContext applicationContext;
 
-    public RecommendationContext(KeywordMatchingStrategy defaultStrategy) {
+    public RecommendationContext(KeywordMatchingStrategy defaultStrategy, ApplicationContext applicationContext) {
         this.strategy = defaultStrategy;
+        this.applicationContext = applicationContext;
     }
 
-    public void setStrategy(RecommendationStrategy strategy) {
-        this.strategy = strategy;
+    public void setStrategyByMode(String mode) {
+        if ("ai".equals(mode)) {
+            this.strategy = applicationContext.getBean("bigQuerySemanticStrategy", RecommendationStrategy.class);
+        } else {
+            this.strategy = applicationContext.getBean("keywordMatchingStrategy", RecommendationStrategy.class);
+        }
     }
 
     public List<Expert> execute(String query, List<Expert> experts, int topN) {
