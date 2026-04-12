@@ -53,6 +53,7 @@ public class DashboardView {
     }
 
     public void show(Stage stage, User user) {
+        System.out.println(">>> [DashboardView] show() called for user: " + user.getEmail() + " | Role: " + user.getRole());
         stage.setTitle("ResearchConnect — " + user.getName());
         stage.setWidth(1200);
         stage.setHeight(750);
@@ -84,6 +85,7 @@ public class DashboardView {
                            "-fx-cursor: hand; -fx-font-size: 12px; -fx-border-color: #fc8181; " +
                            "-fx-border-radius: 4px; -fx-padding: 4 10;");
         logoutBtn.setOnAction(e -> {
+            System.out.println(">>> [DashboardView] Logout button clicked. Logging out user.");
             authService.logout();
             com.research.view.auth.LoginView loginView =
                 com.research.ResearchCollaborationApp.getSpringContext()
@@ -127,6 +129,7 @@ public class DashboardView {
             adminLabel.setPadding(new Insets(16, 0, 8, 8));
             Button adminBtn = navButton("⚙️  Admin Panel", false);
             adminBtn.setOnAction(e -> {
+                System.out.println(">>> [DashboardView] Navigating to Admin Panel");
                 swapContent(adminView.buildPanel());
                 adminBtn.setStyle("-fx-background-color: #fc818122; -fx-text-fill: #fc8181; " +
                     "-fx-background-radius: 6px; -fx-cursor: hand; -fx-alignment: CENTER-LEFT; " +
@@ -169,22 +172,27 @@ public class DashboardView {
         contentArea.getChildren().add(paperSearchView.buildPanel());
 
         paperBtn.setOnAction(e -> {
+            System.out.println(">>> [DashboardView] Navigating to Paper Search");
             resetNavButtons(navBtns); selectNavButton(paperBtn);
             swapContent(paperSearchView.buildPanel());
         });
         expertBtn.setOnAction(e -> {
+            System.out.println(">>> [DashboardView] Navigating to Expert Search");
             resetNavButtons(navBtns); selectNavButton(expertBtn);
             swapContent(expertSearchView.buildPanel());
         });
         collabBtn.setOnAction(e -> {
+            System.out.println(">>> [DashboardView] Navigating to Collaborations");
             resetNavButtons(navBtns); selectNavButton(collabBtn);
             swapContent(collaborationView.buildPanel(user));
         });
         researchBtn.setOnAction(e -> {
+            System.out.println(">>> [DashboardView] Navigating to My Researches");
             resetNavButtons(navBtns); selectNavButton(researchBtn);
             swapContent(myResearchesView.buildPanel());
         });
         profileBtn.setOnAction(e -> {
+            System.out.println(">>> [DashboardView] Navigating to My Profile");
             resetNavButtons(navBtns); selectNavButton(profileBtn);
             swapContent(buildProfilePanel(user));
         });
@@ -206,14 +214,17 @@ public class DashboardView {
         contentArea.getChildren().add(reviewerDashboardView.buildPanel());
 
         reviewBtn.setOnAction(e -> {
+            System.out.println(">>> [DashboardView] Navigating to Review Papers");
             resetNavButtons(navBtns); selectNavButton(reviewBtn);
             swapContent(reviewerDashboardView.buildPanel());
         });
         paperBtn.setOnAction(e -> {
+            System.out.println(">>> [DashboardView] Navigating to Paper Search");
             resetNavButtons(navBtns); selectNavButton(paperBtn);
             swapContent(paperSearchView.buildPanel());
         });
         profileBtn.setOnAction(e -> {
+            System.out.println(">>> [DashboardView] Navigating to My Profile");
             resetNavButtons(navBtns); selectNavButton(profileBtn);
             swapContent(buildProfilePanel(user));
         });

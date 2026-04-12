@@ -23,8 +23,12 @@ public class RecommendationFacade {
     }
 
     public List<Expert> recommend(String userQuery, List<Expert> allExperts) {
+        System.out.println(">>> [RecommendationFacade] recommend() called for query: '" + userQuery + "'");
         List<String> keywords = keywordExtractor.extract(userQuery);
+        System.out.println(">>> [RecommendationFacade] Extracted keywords: " + keywords);
         List<Expert> scored = expertScorer.score(allExperts, keywords);
-        return resultRanker.topN(scored, keywords, 10);
+        List<Expert> topExperts = resultRanker.topN(scored, keywords, 10);
+        System.out.println(">>> [RecommendationFacade] Returning top " + topExperts.size() + " experts.");
+        return topExperts;
     }
 }
