@@ -4,12 +4,7 @@ import com.research.model.Expert;
 import com.research.model.Researcher;
 import com.research.model.ResearchProject;
 import com.research.model.User;
-import com.research.repository.ResearchProjectRepository;
-import com.research.repository.ResearcherRepository;
-import com.research.service.AuthService;
-import com.research.service.CollaborationService;
-import com.research.service.ExpertService;
-import com.research.service.RecommendationService;
+import com.research.controller.ExpertController;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -25,44 +20,39 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * ExpertSearchView — Members 2 + 4 combined view.
+ * ExpertSearchView — View layer for Expert Search & Recommendation.
+ *
+ * @author Member 2
+ * @usecase Expert Search, Recommendation & Expert CRUD
  *
  * Tabs:
- *   1. Find Experts (Recommendation — Member 4, Strategy pattern)
- *   2. Browse & Manage (Expert CRUD — Member 2)
- *   3. Add Expert (Manual entry — Member 2's minor use case)
+ *   1. Find Experts (Strategy pattern — swappable recommendation algorithms)
+ *   2. Browse & Manage (Expert CRUD)
+ *   3. Add Expert (Manual entry)
  *
- * Member 2's features:
- *   - Browse full expert list with search
- *   - Edit any expert's research profile (triggers keyword re-extraction)
- *   - Add a new expert manually
- *   - Deactivate/reactivate experts
+ * Design Pattern demonstrated: Strategy (algorithm selection in UI)
+ * Design Principle: OCP (new strategies without modifying existing code)
  *
- * Design Pattern: Factory (Expert created uniformly via ExpertService)
- * Design Principle: SRP, OCP
+ * MVC Role: View — delegates all business logic to ExpertController
  */
 @Component
 public class ExpertSearchView {
 
-    private final RecommendationService recommendationService;
-    private final ExpertService expertService;
-    private final CollaborationService collaborationService;
-    private final ResearcherRepository researcherRepository;
-    private final ResearchProjectRepository projectRepository;
+    private final ExpertController expertController;
 
-    public ExpertSearchView(RecommendationService recommendationService,
-                            ExpertService expertService,
-                            CollaborationService collaborationService,
-                            ResearcherRepository researcherRepository,
-                            ResearchProjectRepository projectRepository) {
-        this.recommendationService = recommendationService;
-        this.expertService = expertService;
-        this.collaborationService = collaborationService;
-        this.researcherRepository = researcherRepository;
-        this.projectRepository = projectRepository;
+    public ExpertSearchView(ExpertController expertController) {
+        this.expertController = expertController;
     }
 
-    public VBox buildPanel() {
+    private boolean visitorMode = false;
+    private javafx.stage.Stage visitorStage = null;
+
+    public VBox buildPanel() { return buildPanel(false, null); }
+
+    public VBox buildPanel(boolean visitorMode, javafx.stage.Stage stage) {
+        this.visitorMode = visitorMode;
+        this.visitorStage = stage;
+
         VBox panel = new VBox(0);
         panel.setStyle("-fx-background-color: #0f1117;");
 
@@ -71,7 +61,9 @@ public class ExpertSearchView {
         Text title = new Text("Experts & Recommendations");
         title.setFont(Font.font("Georgia", FontWeight.BOLD, 26));
         title.setFill(Color.web("#e2e8f0"));
-        Text subtitle = new Text("AI-powered expert matching · Browse expert profiles · Send collaboration requests");
+        Text subtitle = new Text(visitorMode
+            ? "Browse expert profiles and researcher contact details"
+            : "AI-powered expert matching · Browse expert profiles · Send collaboration requests");
         subtitle.setFont(Font.font("System", 13));
         subtitle.setFill(Color.web("#8892a4"));
         header.getChildren().addAll(title, subtitle);
@@ -143,12 +135,12 @@ public class ExpertSearchView {
             String q = queryField.getText().trim();
             if (q.isBlank()) { resultLbl.setText("Enter a query first."); resultLbl.setTextFill(Color.web("#fc8181")); return; }
             String mode = kwRb.isSelected() ? "keyword" : aiRb.isSelected() ? "ai" : "hybrid";
-            List<Expert> experts = recommendationService.recommendWithStrategy(q, mode);
+            List<Expert> experts = expertController.findExperts(q, mode);
             cards.getChildren().clear();
 
             // Also search registered researchers matching the query
-            List<Researcher> researchers = researcherRepository.findByKeyword(q);
-            User currentUser = AuthService.getCurrentUser();
+            List<Researcher> researchers = expertController.findResearchers(q);
+            User currentUser = expertController.getCurrentUser();
 
             int totalResults = experts.size() + researchers.size();
             if (totalResults == 0) {
@@ -219,18 +211,18 @@ public class ExpertSearchView {
         ObservableList<Expert> data = FXCollections.observableArrayList();
         table.setItems(data);
 
-        List<Expert> allActive = expertService.getAllActiveExperts();
+        List<Expert> allActive = expertController.getAllExperts();
         data.setAll(allActive);
         countLbl.setText(allActive.size() + " active experts");
 
         filterBtn.setOnAction(e -> {
             String kw = filterField.getText().trim();
-            if (kw.isBlank()) { data.setAll(expertService.getAllActiveExperts()); return; }
-            data.setAll(expertService.searchByKeyword(kw));
+            if (kw.isBlank()) { data.setAll(expertController.getAllExperts()); return; }
+            data.setAll(expertController.searchExperts(kw));
             countLbl.setText(data.size() + " result(s)");
         });
         showAllBtn.setOnAction(e -> {
-            data.setAll(expertService.getAllActiveExperts());
+            data.setAll(expertController.getAllExperts());
             countLbl.setText(data.size() + " active experts");
             filterField.clear();
         });
@@ -317,7 +309,7 @@ public class ExpertSearchView {
             if (sel == null) return;
             try {
                 // updateResearchProfile also re-extracts keywords — OCP in action
-                Expert updated = expertService.updateResearchProfile(
+                Expert updated = expertController.updateExpertProfile(
                         sel.getExpertId(), researchArea.getText().trim());
                 // Also update domain if user changed it
                 if (!domainField.getText().isBlank()) {
@@ -325,7 +317,7 @@ public class ExpertSearchView {
                 }
                 editStatus.setTextFill(Color.web("#68d391"));
                 editStatus.setText("✓ Profile updated. Keywords re-extracted automatically.");
-                data.setAll(expertService.getAllActiveExperts());
+                data.setAll(expertController.getAllExperts());
             } catch (Exception ex) {
                 editStatus.setTextFill(Color.web("#fc8181")); editStatus.setText(ex.getMessage());
             }
@@ -339,8 +331,8 @@ public class ExpertSearchView {
                 ButtonType.YES, ButtonType.NO);
             c.showAndWait().ifPresent(b -> {
                 if (b == ButtonType.YES) {
-                    expertService.deactivateExpert(sel.getExpertId());
-                    data.setAll(expertService.getAllActiveExperts());
+                    expertController.toggleExpertStatus(sel.getExpertId());
+                    data.setAll(expertController.getAllExperts());
                     editStatus.setTextFill(Color.web("#ecc94b"));
                     editStatus.setText("Expert deactivated and removed from recommendations.");
                     saveEditBtn.setDisable(true); deactivateBtn.setDisable(true);
@@ -396,11 +388,12 @@ public class ExpertSearchView {
             try {
                 String inst = institutionField.getText().isBlank()
                     ? "PES University" : institutionField.getText().trim();
-                Expert expert = expertService.importFromCsvRow(
+                Expert expert = expertController.addExpert(
                     name,
                     desigField.getText().isBlank() ? "Teaching" : desigField.getText().trim(),
                     email,
                     phoneField.getText().trim(),
+                    inst,
                     researchArea.getText().trim()
                 );
                 status(statusLbl,
@@ -540,17 +533,25 @@ public class ExpertSearchView {
                             "-fx-pref-width:110px;-fx-pref-height:32px;-fx-background-radius:6px;" +
                             "-fx-cursor:hand;-fx-font-weight:bold;");
         requestBtn.setOnAction(e -> {
-            User currentUser = AuthService.getCurrentUser();
+            User currentUser = expertController.getCurrentUser();
             if (currentUser == null) {
-                reqStatus.setTextFill(Color.web("#fc8181"));
-                reqStatus.setText("Login first");
+                // Visitor mode — show login dialog
+                if (visitorStage != null) {
+                    com.research.view.dashboard.DashboardView dv =
+                        com.research.ResearchCollaborationApp.getSpringContext()
+                            .getBean(com.research.view.dashboard.DashboardView.class);
+                    dv.showLoginDialog(visitorStage, false);
+                } else {
+                    reqStatus.setTextFill(Color.web("#fc8181"));
+                    reqStatus.setText("Login first");
+                }
                 return;
             }
             // Get user's projects for selection
             List<ResearchProject> myProjects = new ArrayList<>();
             try {
                 if (currentUser instanceof Researcher) {
-                    myProjects = projectRepository.findByOwner((Researcher) currentUser);
+                    myProjects = expertController.getMyProjects();
                 }
             } catch (Exception ignored) {}
 
@@ -564,8 +565,8 @@ public class ExpertSearchView {
                 noProj.showAndWait().ifPresent(bt -> {
                     if (bt.getText().equals("Send General Request")) {
                         try {
-                            collaborationService.sendRequest(
-                                currentUser.getUserId(), r.getUserId(), null,
+                            expertController.sendCollaborationRequest(
+                                r.getUserId(), null,
                                 "Hi! I'd like to collaborate with you.");
                             reqStatus.setTextFill(Color.web("#68d391"));
                             reqStatus.setText("Request sent!");
@@ -598,8 +599,8 @@ public class ExpertSearchView {
                             .findFirst().orElse(null);
                         String msg = "Hi! I'd like to collaborate on '" + 
                             (proj != null ? proj.getTopic() : "a project") + "' with you.";
-                        collaborationService.sendRequest(
-                            currentUser.getUserId(), r.getUserId(), projectId, msg);
+                        expertController.sendCollaborationRequest(
+                            r.getUserId(), projectId, msg);
                         reqStatus.setTextFill(Color.web("#68d391"));
                         reqStatus.setText("Request sent!");
                         requestBtn.setDisable(true);

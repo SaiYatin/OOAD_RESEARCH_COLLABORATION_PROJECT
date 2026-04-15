@@ -3,12 +3,7 @@ package com.research.view.paper;
 import com.research.model.ResearchPaper;
 import com.research.model.Researcher;
 import com.research.model.User;
-import com.research.pattern.BasicPaperSearch;
-import com.research.pattern.DomainFilterDecorator;
-import com.research.pattern.PublishedOnlyDecorator;
-import com.research.repository.ResearchPaperRepository;
-import com.research.service.AuthService;
-import com.research.service.PaperService;
+import com.research.controller.PaperController;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -23,7 +18,10 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * PaperSearchView — Member 1's complete view.
+ * PaperSearchView — View layer for Paper Search, Upload & Review.
+ *
+ * @author Member 1
+ * @usecase Paper Upload, Search & Review
  *
  * Tabs:
  *   1. Search All  — keyword search + Decorator chain (Published / Domain filters)
@@ -31,31 +29,23 @@ import java.util.List;
  *   3. My Papers   — table of own papers, submit / publish / delete actions
  *
  * Design Pattern demonstrated: Decorator (search filter chain shown live in UI)
- * Design Principle: SRP (each tab one responsibility), DIP (uses PaperService)
+ * Design Principle: SRP (each tab one responsibility), DIP (depends on controller abstraction)
+ *
+ * MVC Role: View — delegates all business logic to PaperController
  */
 @Component
 public class PaperSearchView {
 
-    private final ResearchPaperRepository paperRepository;
-    private final BasicPaperSearch        basicSearch;
-    private final DomainFilterDecorator   domainDecorator;
-    private final PublishedOnlyDecorator  publishedDecorator;
-    private final PaperService            paperService;   // ← field properly declared
+    private final PaperController paperController;
 
-    public PaperSearchView(ResearchPaperRepository paperRepository,
-                           BasicPaperSearch basicSearch,
-                           DomainFilterDecorator domainDecorator,
-                           PublishedOnlyDecorator publishedDecorator,
-                           PaperService paperService) {
-        this.paperRepository    = paperRepository;
-        this.basicSearch        = basicSearch;
-        this.domainDecorator    = domainDecorator;
-        this.publishedDecorator = publishedDecorator;
-        this.paperService       = paperService;          // ← properly assigned
+    public PaperSearchView(PaperController paperController) {
+        this.paperController = paperController;
     }
 
     // ── Top-level panel ───────────────────────────────────────────────
-    public VBox buildPanel() {
+    public VBox buildPanel() { return buildPanel(false); }
+
+    public VBox buildPanel(boolean visitorMode) {
         VBox panel = new VBox(0);
         panel.setStyle("-fx-background-color:#0f1117;");
 
@@ -65,30 +55,38 @@ public class PaperSearchView {
         Text title = new Text("Research Papers");
         title.setFont(Font.font("Georgia", FontWeight.BOLD, 26));
         title.setFill(Color.web("#e2e8f0"));
-        Text subtitle = new Text("Search the database · Upload your work · Manage your papers");
+        Text subtitle = new Text(visitorMode
+            ? "Browse published research papers"
+            : "Search the database · Upload your work · Manage your papers");
         subtitle.setFont(Font.font("System", 13));
         subtitle.setFill(Color.web("#8892a4"));
         header.getChildren().addAll(title, subtitle);
 
-        // Tab strip
+        // Tab strip — visitors only get Search tab
         ToggleGroup tabGroup = new ToggleGroup();
-        ToggleButton searchTab   = tabBtn("🔍  Search All",   tabGroup, true);
-        ToggleButton uploadTab   = tabBtn("📤  Upload Paper", tabGroup, false);
-        ToggleButton myPapersTab = tabBtn("📁  My Papers",    tabGroup, false);
-        HBox tabRow = new HBox(4, searchTab, uploadTab, myPapersTab);
-        tabRow.setPadding(new Insets(0, 0, 16, 0));
+        ToggleButton searchTab = tabBtn("🔍  Search All", tabGroup, true);
+        HBox tabRow;
 
         StackPane content = new StackPane();
         VBox.setVgrow(content, Priority.ALWAYS);
         content.getChildren().add(buildSearchPane());
 
-        tabGroup.selectedToggleProperty().addListener((obs, o, n) -> {
-            content.getChildren().clear();
-            if      (n == searchTab)   content.getChildren().add(buildSearchPane());
-            else if (n == uploadTab)   content.getChildren().add(buildUploadPane());
-            else if (n == myPapersTab) content.getChildren().add(buildMyPapersPane());
-        });
+        if (visitorMode) {
+            tabRow = new HBox(4, searchTab);
+        } else {
+            ToggleButton uploadTab   = tabBtn("📤  Upload Paper", tabGroup, false);
+            ToggleButton myPapersTab = tabBtn("📁  My Papers",    tabGroup, false);
+            tabRow = new HBox(4, searchTab, uploadTab, myPapersTab);
 
+            tabGroup.selectedToggleProperty().addListener((obs, o, n) -> {
+                content.getChildren().clear();
+                if      (n == searchTab)   content.getChildren().add(buildSearchPane());
+                else if (n == uploadTab)   content.getChildren().add(buildUploadPane());
+                else if (n == myPapersTab) content.getChildren().add(buildMyPapersPane());
+            });
+        }
+
+        tabRow.setPadding(new Insets(0, 0, 16, 0));
         panel.getChildren().addAll(header, tabRow, content);
         return panel;
     }
@@ -144,27 +142,19 @@ public class PaperSearchView {
         ObservableList<ResearchPaper> data = FXCollections.observableArrayList();
         table.setItems(data);
 
-        // Load all on open
-        List<ResearchPaper> all = paperRepository.findAll();
+        // Load all on open (via Controller)
+        List<ResearchPaper> all = paperController.getAllPapers();
         data.setAll(all);
         countLbl.setText(all.size() + " papers in database");
 
         Runnable doSearch = () -> {
-            String q      = searchField.getText().trim();
-            List<ResearchPaper> papers = paperRepository.findAll();
-            List<ResearchPaper> result;
+            String q = searchField.getText().trim();
+            boolean pubOnly = publishedCb.isSelected();
+            String domFilter = domainField.getText().trim();
 
-            if (publishedCb.isSelected() && !domainField.getText().isBlank()) {
-                result = domainDecorator.withDomain(domainField.getText().trim())
-                         .search(q, publishedDecorator.search(q, papers));
-            } else if (publishedCb.isSelected()) {
-                result = publishedDecorator.search(q, papers);
-            } else if (!domainField.getText().isBlank()) {
-                result = domainDecorator.withDomain(domainField.getText().trim())
-                         .search(q, papers);
-            } else {
-                result = basicSearch.search(q, papers);
-            }
+            // Decorator pattern is applied inside the Controller
+            List<ResearchPaper> result = paperController.searchPapers(
+                    q, pubOnly, domFilter.isBlank() ? null : domFilter);
 
             data.setAll(result);
             countLbl.setText(result.size() + " result(s) — " + chainLbl.getText());
@@ -217,7 +207,7 @@ public class PaperSearchView {
                 status(statusLbl, "Title and Author are required.", false);
                 return;
             }
-            User cu = AuthService.getCurrentUser();
+            User cu = paperController.getCurrentUser();
             if (!(cu instanceof Researcher researcher)) {
                 status(statusLbl, "Only Researcher accounts can upload papers.", false);
                 return;
@@ -230,7 +220,7 @@ public class PaperSearchView {
             p.setLink(linkField.getText().trim());
             p.setAbstractText(abstractArea.getText().trim());
 
-            ResearchPaper saved = paperService.uploadPaper(p, researcher);
+            ResearchPaper saved = paperController.uploadPaper(p);
             lastId[0] = saved.getPaperId();
             status(statusLbl, "✓ Saved as DRAFT (ID " + saved.getPaperId()
                    + "). Now submit it for review.", true);
@@ -240,7 +230,7 @@ public class PaperSearchView {
         submitBtn.setOnAction(e -> {
             if (lastId[0] == null) { status(statusLbl, "Save paper first.", false); return; }
             try {
-                paperService.submitForReview(lastId[0]);
+                paperController.submitForReview(lastId[0]);
                 status(statusLbl, "✓ Submitted for review! Status: SUBMITTED.", true);
                 submitBtn.setDisable(true);
             } catch (Exception ex) {
@@ -276,7 +266,7 @@ public class PaperSearchView {
         heading.setFont(Font.font("Georgia", FontWeight.BOLD, 20));
         heading.setFill(Color.web("#e2e8f0"));
 
-        User cu = AuthService.getCurrentUser();
+        User cu = paperController.getCurrentUser();
         if (!(cu instanceof Researcher researcher)) {
             Label note = new Label("Log in as a Researcher to see your papers.");
             note.setTextFill(Color.web("#8892a4"));
@@ -284,7 +274,7 @@ public class PaperSearchView {
             return pane;
         }
 
-        List<ResearchPaper> mine = paperService.getPapersByResearcher(researcher);
+        List<ResearchPaper> mine = paperController.getMyPapers();
 
         Label countLbl = new Label(mine.size() + " paper(s)");
         countLbl.setFont(Font.font("System", 12));
@@ -310,7 +300,7 @@ public class PaperSearchView {
         HBox actions = new HBox(10, submitBtn, publishBtn, deleteBtn);
 
         Runnable refresh = () -> {
-            data.setAll(paperService.getPapersByResearcher(researcher));
+            data.setAll(paperController.getMyPapers());
             countLbl.setText(data.size() + " paper(s)");
         };
 
@@ -318,7 +308,7 @@ public class PaperSearchView {
             ResearchPaper sel = table.getSelectionModel().getSelectedItem();
             if (sel == null) { status(actionStatus, "Select a paper.", false); return; }
             try {
-                paperService.submitForReview(sel.getPaperId());
+                paperController.submitForReview(sel.getPaperId());
                 refresh.run();
                 status(actionStatus, "✓ Submitted for review.", true);
             } catch (Exception ex) { status(actionStatus, ex.getMessage(), false); }
@@ -328,7 +318,7 @@ public class PaperSearchView {
             ResearchPaper sel = table.getSelectionModel().getSelectedItem();
             if (sel == null) { status(actionStatus, "Select a paper.", false); return; }
             try {
-                paperService.publishPaper(sel.getPaperId());
+                paperController.publishPaper(sel.getPaperId());
                 refresh.run();
                 status(actionStatus,
                     "✓ Published! Observer pattern fired → n8n email notifications sent.", true);
@@ -342,7 +332,7 @@ public class PaperSearchView {
                 "Delete \"" + sel.getTitle() + "\"?", ButtonType.YES, ButtonType.NO);
             c.showAndWait().ifPresent(b -> {
                 if (b == ButtonType.YES) {
-                    paperService.deletePaper(sel.getPaperId());
+                    paperController.deletePaper(sel.getPaperId());
                     refresh.run();
                     status(actionStatus, "Paper deleted.", true);
                 }

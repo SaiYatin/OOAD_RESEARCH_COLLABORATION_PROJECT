@@ -1,7 +1,7 @@
 package com.research.view.dashboard;
 
 import com.research.model.User;
-import com.research.service.AuthService;
+import com.research.controller.AuthController;
 import com.research.view.admin.AdminView;
 import com.research.view.expert.ExpertSearchView;
 import com.research.view.paper.PaperSearchView;
@@ -19,9 +19,21 @@ import javafx.stage.Stage;
 import org.springframework.stereotype.Component;
 
 /**
- * DashboardView - main shell after successful login.
- * Left sidebar navigation → swaps content area per tab.
- * Adapts navigation based on user role (RESEARCHER, REVIEWER, ADMIN).
+ * DashboardView — Main application shell.
+ *
+ * @author Member 4
+ * @usecase User Registration, Login, Session Management & Role-Based Navigation
+ *
+ * Supports three modes:
+ *   - Visitor (user=null): limited browsing, login/signup in top bar
+ *   - Researcher: full research features
+ *   - Reviewer: review-focused dashboard
+ *   - Admin: admin panel added
+ *
+ * Design Pattern demonstrated: Factory Method (user creation via AuthController)
+ * Design Principle: LSP (all User subclasses substitutable)
+ *
+ * MVC Role: View — delegates authentication to AuthController
  */
 @Component
 public class DashboardView {
@@ -32,9 +44,10 @@ public class DashboardView {
     private final MyResearchesView myResearchesView;
     private final ReviewerDashboardView reviewerDashboardView;
     private final AdminView adminView;
-    private final AuthService authService;
+    private final AuthController authController;
 
     private StackPane contentArea;
+    private Stage currentStage;
 
     public DashboardView(ExpertSearchView expertSearchView,
                          PaperSearchView paperSearchView,
@@ -42,18 +55,24 @@ public class DashboardView {
                          MyResearchesView myResearchesView,
                          ReviewerDashboardView reviewerDashboardView,
                          AdminView adminView,
-                         AuthService authService) {
+                         AuthController authController) {
         this.expertSearchView = expertSearchView;
         this.paperSearchView = paperSearchView;
         this.collaborationView = collaborationView;
         this.myResearchesView = myResearchesView;
         this.reviewerDashboardView = reviewerDashboardView;
         this.adminView = adminView;
-        this.authService = authService;
+        this.authController = authController;
     }
 
+    /**
+     * @param user null = Visitor mode (no login)
+     */
     public void show(Stage stage, User user) {
-        stage.setTitle("ResearchConnect — " + user.getName());
+        this.currentStage = stage;
+        boolean isVisitor = (user == null);
+
+        stage.setTitle(isVisitor ? "ResearchConnect — Browse as Visitor" : "ResearchConnect — " + user.getName());
         stage.setWidth(1200);
         stage.setHeight(750);
         stage.setResizable(true);
@@ -75,26 +94,49 @@ public class DashboardView {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Label userBadge = new Label(user.getName() + "  [" + user.getRole() + "]");
-        userBadge.setStyle("-fx-background-color: #2d3748; -fx-text-fill: #a0aec0; " +
-                           "-fx-padding: 6 14; -fx-background-radius: 20px; -fx-font-size: 12px;");
+        topBar.getChildren().addAll(logo, spacer);
 
-        Button logoutBtn = new Button("Logout");
-        logoutBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #fc8181; " +
-                           "-fx-cursor: hand; -fx-font-size: 12px; -fx-border-color: #fc8181; " +
-                           "-fx-border-radius: 4px; -fx-padding: 4 10;");
-        logoutBtn.setOnAction(e -> {
-            authService.logout();
-            com.research.view.auth.LoginView loginView =
-                com.research.ResearchCollaborationApp.getSpringContext()
-                    .getBean(com.research.view.auth.LoginView.class);
-            loginView.show(stage);
-        });
+        if (isVisitor) {
+            // Visitor: Login / Sign Up buttons
+            Label visitorBadge = new Label("👁️  Browsing as Visitor");
+            visitorBadge.setStyle("-fx-background-color: #2d3748; -fx-text-fill: #a0aec0; " +
+                                  "-fx-padding: 6 14; -fx-background-radius: 20px; -fx-font-size: 12px;");
 
-        topBar.getChildren().addAll(logo, spacer, userBadge,
-                new Region() {{ setMinWidth(12); }}, logoutBtn);
+            Button loginBtn = new Button("Login");
+            loginBtn.setStyle("-fx-background-color: #6c9bff; -fx-text-fill: white; " +
+                              "-fx-cursor: hand; -fx-font-size: 12px; -fx-font-weight: bold; " +
+                              "-fx-background-radius: 6px; -fx-padding: 6 18;");
+            loginBtn.setOnAction(e -> showLoginDialog(stage, false));
 
-        // ── Left Sidebar ─────────────────────────────────────────────
+            Button signupBtn = new Button("Sign Up");
+            signupBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #6c9bff; " +
+                               "-fx-cursor: hand; -fx-font-size: 12px; -fx-border-color: #6c9bff; " +
+                               "-fx-border-radius: 6px; -fx-padding: 6 18;");
+            signupBtn.setOnAction(e -> showLoginDialog(stage, true));
+
+            topBar.getChildren().addAll(visitorBadge,
+                    new Region() {{ setMinWidth(12); }}, loginBtn,
+                    new Region() {{ setMinWidth(6); }}, signupBtn);
+        } else {
+            // Logged-in user
+            Label userBadge = new Label(user.getName() + "  [" + user.getRole() + "]");
+            userBadge.setStyle("-fx-background-color: #2d3748; -fx-text-fill: #a0aec0; " +
+                               "-fx-padding: 6 14; -fx-background-radius: 20px; -fx-font-size: 12px;");
+
+            Button logoutBtn = new Button("Logout");
+            logoutBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #fc8181; " +
+                               "-fx-cursor: hand; -fx-font-size: 12px; -fx-border-color: #fc8181; " +
+                               "-fx-border-radius: 4px; -fx-padding: 4 10;");
+            logoutBtn.setOnAction(e -> {
+                authController.logout();
+                show(stage, null); // Back to visitor mode
+            });
+
+            topBar.getChildren().addAll(userBadge,
+                    new Region() {{ setMinWidth(12); }}, logoutBtn);
+        }
+
+        // ── Sidebar ──────────────────────────────────────────────────
         VBox sidebar = new VBox(4);
         sidebar.setPrefWidth(220);
         sidebar.setPadding(new Insets(24, 12, 24, 12));
@@ -104,23 +146,24 @@ public class DashboardView {
         sectionLabel.setFont(Font.font("System", FontWeight.BOLD, 10));
         sectionLabel.setTextFill(Color.web("#4a5568"));
         sectionLabel.setPadding(new Insets(0, 0, 8, 8));
+        sidebar.getChildren().add(sectionLabel);
 
         // ── Content Area ─────────────────────────────────────────────
         contentArea = new StackPane();
         contentArea.setStyle("-fx-background-color: #0f1117;");
         contentArea.setPadding(new Insets(24));
 
-        sidebar.getChildren().add(sectionLabel);
-
-        // Build navigation based on role
-        if (user.getRole() == User.UserRole.REVIEWER) {
+        // Build role-specific navigation
+        if (isVisitor) {
+            buildVisitorNav(sidebar, stage);
+        } else if (user.getRole() == User.UserRole.REVIEWER) {
             buildReviewerNav(sidebar, user);
         } else {
             buildResearcherNav(sidebar, user);
         }
 
         // Admin section
-        if (user.getRole() == User.UserRole.ADMIN) {
+        if (!isVisitor && user.getRole() == User.UserRole.ADMIN) {
             Label adminLabel = new Label("ADMIN");
             adminLabel.setFont(Font.font("System", FontWeight.BOLD, 10));
             adminLabel.setTextFill(Color.web("#4a5568"));
@@ -154,23 +197,53 @@ public class DashboardView {
     }
 
     // ═══════════════════════════════════════════════════════════
+    // Visitor Navigation (limited)
+    // ═══════════════════════════════════════════════════════════
+
+    private void buildVisitorNav(VBox sidebar, Stage stage) {
+        Button paperBtn  = navButton("📄  Paper Search", true);
+        Button expertBtn = navButton("🔬  Find Experts", false);
+        Button collabBtn = navButton("🤝  Active Collaborations", false);
+
+        Button[] navBtns = {paperBtn, expertBtn, collabBtn};
+
+        // Default: paper search (visitor mode = no upload/my papers tabs)
+        contentArea.getChildren().add(paperSearchView.buildPanel(true));
+
+        paperBtn.setOnAction(e -> {
+            resetNavButtons(navBtns); selectNavButton(paperBtn);
+            swapContent(paperSearchView.buildPanel(true));
+        });
+        expertBtn.setOnAction(e -> {
+            resetNavButtons(navBtns); selectNavButton(expertBtn);
+            swapContent(expertSearchView.buildPanel(true, stage));
+        });
+        collabBtn.setOnAction(e -> {
+            resetNavButtons(navBtns); selectNavButton(collabBtn);
+            swapContent(collaborationView.buildVisitorPanel(stage));
+        });
+
+        for (Button btn : navBtns) sidebar.getChildren().add(btn);
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // Researcher Navigation
     // ═══════════════════════════════════════════════════════════
 
     private void buildResearcherNav(VBox sidebar, User user) {
-        Button paperBtn   = navButton("📄  Paper Search", true);
-        Button expertBtn  = navButton("🔬  Find Experts", false);
-        Button collabBtn  = navButton("🤝  Collaborations", false);
+        Button paperBtn    = navButton("📄  Paper Search", true);
+        Button expertBtn   = navButton("🔬  Find Experts", false);
+        Button collabBtn   = navButton("🤝  Collaborations", false);
         Button researchBtn = navButton("🔬  My Researches", false);
-        Button profileBtn = navButton("👤  My Profile", false);
+        Button profileBtn  = navButton("👤  My Profile", false);
 
         Button[] navBtns = {paperBtn, expertBtn, collabBtn, researchBtn, profileBtn};
 
-        contentArea.getChildren().add(paperSearchView.buildPanel());
+        contentArea.getChildren().add(paperSearchView.buildPanel(false));
 
         paperBtn.setOnAction(e -> {
             resetNavButtons(navBtns); selectNavButton(paperBtn);
-            swapContent(paperSearchView.buildPanel());
+            swapContent(paperSearchView.buildPanel(false));
         });
         expertBtn.setOnAction(e -> {
             resetNavButtons(navBtns); selectNavButton(expertBtn);
@@ -211,7 +284,7 @@ public class DashboardView {
         });
         paperBtn.setOnAction(e -> {
             resetNavButtons(navBtns); selectNavButton(paperBtn);
-            swapContent(paperSearchView.buildPanel());
+            swapContent(paperSearchView.buildPanel(false));
         });
         profileBtn.setOnAction(e -> {
             resetNavButtons(navBtns); selectNavButton(profileBtn);
@@ -222,6 +295,145 @@ public class DashboardView {
     }
 
     // ═══════════════════════════════════════════════════════════
+    // Login / Signup Dialog (shown in-app, Netflix style)
+    // ═══════════════════════════════════════════════════════════
+
+    public void showLoginDialog(Stage stage, boolean startWithRegister) {
+        Dialog<User> dialog = new Dialog<>();
+        dialog.setTitle(startWithRegister ? "Create Account" : "Login to ResearchConnect");
+
+        VBox content = new VBox(14);
+        content.setPadding(new Insets(20));
+        content.setMinWidth(380);
+        content.setStyle("-fx-background-color: #0f1117;");
+
+        Text heading = new Text(startWithRegister ? "Create Account" : "Welcome Back");
+        heading.setFont(Font.font("Georgia", FontWeight.BOLD, 22));
+        heading.setFill(Color.web("#e2e8f0"));
+
+        Text subtext = new Text(startWithRegister
+            ? "Sign up to collaborate, publish, and more."
+            : "Login to access all features.");
+        subtext.setFont(Font.font("System", 12));
+        subtext.setFill(Color.web("#8892a4"));
+
+        // Toggle
+        ToggleGroup mode = new ToggleGroup();
+        ToggleButton loginTab = new ToggleButton("Login");
+        ToggleButton registerTab = new ToggleButton("Register");
+        loginTab.setToggleGroup(mode);
+        registerTab.setToggleGroup(mode);
+        if (startWithRegister) registerTab.setSelected(true);
+        else loginTab.setSelected(true);
+        String tabBase = "-fx-cursor:hand;-fx-font-size:12px;-fx-pref-width:120px;-fx-pref-height:36px;";
+        loginTab.setStyle("-fx-background-color:#1a1f2e;-fx-text-fill:#8892a4;-fx-background-radius:6 0 0 6;" + tabBase);
+        registerTab.setStyle("-fx-background-color:#1a1f2e;-fx-text-fill:#8892a4;-fx-background-radius:0 6 6 0;" + tabBase);
+        Runnable updateTabs = () -> {
+            loginTab.setStyle((loginTab.isSelected()
+                ? "-fx-background-color:#6c9bff;-fx-text-fill:white;-fx-font-weight:bold;"
+                : "-fx-background-color:#1a1f2e;-fx-text-fill:#8892a4;")
+                + "-fx-background-radius:6 0 0 6;" + tabBase);
+            registerTab.setStyle((registerTab.isSelected()
+                ? "-fx-background-color:#6c9bff;-fx-text-fill:white;-fx-font-weight:bold;"
+                : "-fx-background-color:#1a1f2e;-fx-text-fill:#8892a4;")
+                + "-fx-background-radius:0 6 6 0;" + tabBase);
+        };
+        updateTabs.run();
+        mode.selectedToggleProperty().addListener((obs, o, n) -> updateTabs.run());
+        HBox tabRow = new HBox(0, loginTab, registerTab);
+        tabRow.setAlignment(Pos.CENTER);
+
+        // Fields
+        TextField nameField = new TextField();
+        nameField.setPromptText("Full name");
+        nameField.setStyle(fieldStyle());
+        Label nameLabel = new Label("Full Name");
+        nameLabel.setTextFill(Color.web("#8892a4"));
+        nameLabel.setFont(Font.font("System", FontWeight.BOLD, 11));
+
+        ComboBox<String> roleCombo = new ComboBox<>();
+        roleCombo.getItems().addAll("RESEARCHER", "REVIEWER");
+        roleCombo.setValue("RESEARCHER");
+        roleCombo.setStyle("-fx-background-color:#1a1f2e;-fx-border-color:#2d3748;-fx-border-radius:6px;-fx-pref-width:340px;-fx-pref-height:40px;");
+        Label roleLabel = new Label("Role");
+        roleLabel.setTextFill(Color.web("#8892a4"));
+        roleLabel.setFont(Font.font("System", FontWeight.BOLD, 11));
+
+        TextField emailField = new TextField();
+        emailField.setPromptText("email@example.com");
+        emailField.setStyle(fieldStyle());
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("Password");
+        passwordField.setStyle(fieldStyle());
+
+        Label statusLabel = new Label("");
+        statusLabel.setWrapText(true);
+        statusLabel.setMaxWidth(340);
+
+        // Register-only fields visibility
+        Runnable updateVisibility = () -> {
+            boolean isReg = registerTab.isSelected();
+            nameLabel.setVisible(isReg); nameLabel.setManaged(isReg);
+            nameField.setVisible(isReg); nameField.setManaged(isReg);
+            roleLabel.setVisible(isReg); roleLabel.setManaged(isReg);
+            roleCombo.setVisible(isReg); roleCombo.setManaged(isReg);
+            heading.setText(isReg ? "Create Account" : "Welcome Back");
+            subtext.setText(isReg ? "Sign up to collaborate, publish, and more." : "Login to access all features.");
+        };
+        mode.selectedToggleProperty().addListener((obs, o, n) -> updateVisibility.run());
+        updateVisibility.run();
+
+        Button actionBtn = new Button(startWithRegister ? "Create Account" : "Login");
+        actionBtn.setStyle("-fx-background-color:#6c9bff;-fx-text-fill:white;-fx-font-size:14px;" +
+                           "-fx-font-weight:bold;-fx-pref-width:340px;-fx-pref-height:44px;" +
+                           "-fx-background-radius:8px;-fx-cursor:hand;");
+
+        mode.selectedToggleProperty().addListener((obs, o, n) ->
+            actionBtn.setText(registerTab.isSelected() ? "Create Account" : "Login"));
+
+        actionBtn.setOnAction(e -> {
+            statusLabel.setTextFill(Color.web("#fc8181"));
+            String email = emailField.getText().trim();
+            String password = passwordField.getText().trim();
+            if (email.isEmpty() || password.isEmpty()) {
+                statusLabel.setText("Please fill in all fields.");
+                return;
+            }
+            boolean isReg = registerTab.isSelected();
+            try {
+                if (isReg) {
+                    String name = nameField.getText().trim();
+                    if (name.isEmpty()) { statusLabel.setText("Please enter your name."); return; }
+                    User.UserRole role = User.UserRole.valueOf(roleCombo.getValue());
+                    authController.register(name, email, password, role);
+                    statusLabel.setTextFill(Color.web("#68d391"));
+                    statusLabel.setText("Account created! Switching to login...");
+                    mode.selectToggle(loginTab);
+                } else {
+                    User user = authController.login(email, password);
+                    dialog.setResult(user);
+                    dialog.close();
+                    show(stage, user); // Re-show dashboard as logged-in user
+                }
+            } catch (Exception ex) {
+                statusLabel.setText(ex.getMessage());
+            }
+        });
+
+        content.getChildren().addAll(heading, subtext, tabRow,
+            nameLabel, nameField, roleLabel, roleCombo,
+            new Label("Email") {{ setTextFill(Color.web("#8892a4")); setFont(Font.font("System", FontWeight.BOLD, 11)); }},
+            emailField,
+            new Label("Password") {{ setTextFill(Color.web("#8892a4")); setFont(Font.font("System", FontWeight.BOLD, 11)); }},
+            passwordField, actionBtn, statusLabel);
+
+        dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
+        dialog.getDialogPane().setStyle("-fx-background-color:#0f1117;");
+        dialog.showAndWait();
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // Shared helpers
     // ═══════════════════════════════════════════════════════════
 
@@ -229,6 +441,8 @@ public class DashboardView {
         contentArea.getChildren().clear();
         contentArea.getChildren().add(panel);
     }
+
+    public Stage getCurrentStage() { return currentStage; }
 
     private VBox buildProfilePanel(User user) {
         VBox panel = new VBox(16);
@@ -261,29 +475,31 @@ public class DashboardView {
         return lbl;
     }
 
+    private String fieldStyle() {
+        return "-fx-background-color:#1a1f2e;-fx-text-fill:#e2e8f0;" +
+               "-fx-prompt-text-fill:#4a5568;-fx-border-color:#2d3748;" +
+               "-fx-border-radius:6px;-fx-background-radius:6px;" +
+               "-fx-pref-width:340px;-fx-pref-height:42px;-fx-padding:0 12px;";
+    }
+
     private Button navButton(String text, boolean selected) {
         Button btn = new Button(text);
         btn.setMaxWidth(Double.MAX_VALUE);
         btn.setAlignment(Pos.CENTER_LEFT);
         btn.setPadding(new Insets(10, 16, 10, 16));
         btn.setFont(Font.font("System", 13));
-        if (selected) {
-            selectNavButton(btn);
-        } else {
-            btn.setStyle("-fx-background-color: transparent; -fx-text-fill: #8892a4; " +
+        if (selected) selectNavButton(btn);
+        else btn.setStyle("-fx-background-color: transparent; -fx-text-fill: #8892a4; " +
                          "-fx-background-radius: 6px; -fx-cursor: hand; -fx-alignment: CENTER-LEFT;");
-        }
         btn.setOnMouseEntered(e -> {
-            if (!btn.getStyle().contains("#6c9bff")) {
+            if (!btn.getStyle().contains("#6c9bff"))
                 btn.setStyle("-fx-background-color: #2d3748; -fx-text-fill: #e2e8f0; " +
                              "-fx-background-radius: 6px; -fx-cursor: hand; -fx-alignment: CENTER-LEFT;");
-            }
         });
         btn.setOnMouseExited(e -> {
-            if (!btn.getStyle().contains("#6c9bff")) {
+            if (!btn.getStyle().contains("#6c9bff"))
                 btn.setStyle("-fx-background-color: transparent; -fx-text-fill: #8892a4; " +
                              "-fx-background-radius: 6px; -fx-cursor: hand; -fx-alignment: CENTER-LEFT;");
-            }
         });
         return btn;
     }
@@ -296,9 +512,8 @@ public class DashboardView {
     }
 
     private void resetNavButtons(Button[] btns) {
-        for (Button b : btns) {
+        for (Button b : btns)
             b.setStyle("-fx-background-color: transparent; -fx-text-fill: #8892a4; " +
                        "-fx-background-radius: 6px; -fx-cursor: hand; -fx-alignment: CENTER-LEFT;");
-        }
     }
 }

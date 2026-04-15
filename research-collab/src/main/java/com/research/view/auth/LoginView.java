@@ -1,7 +1,7 @@
 package com.research.view.auth;
 
 import com.research.model.User;
-import com.research.service.AuthService;
+import com.research.controller.AuthController;
 import com.research.view.dashboard.DashboardView;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -14,18 +14,21 @@ import javafx.stage.Stage;
 import org.springframework.stereotype.Component;
 
 /**
- * LoginView - JavaFX login and registration screen.
- * Member 1's view layer for the Auth use case.
- * MVC: This is the View. AuthService is the Controller+Model.
+ * LoginView — JavaFX login and registration screen.
+ *
+ * @author Member 4
+ * @usecase User Authentication & Registration
+ *
+ * MVC Role: View — delegates authentication to AuthController
  */
 @Component
 public class LoginView {
 
-    private final AuthService authService;
+    private final AuthController authController;
     private final DashboardView dashboardView;
 
-    public LoginView(AuthService authService, DashboardView dashboardView) {
-        this.authService = authService;
+    public LoginView(AuthController authController, DashboardView dashboardView) {
+        this.authController = authController;
         this.dashboardView = dashboardView;
     }
 
@@ -180,12 +183,12 @@ public class LoginView {
                         return;
                     }
                     User.UserRole role = User.UserRole.valueOf(roleStr);
-                    authService.register(name, email, password, role);
+                    authController.register(name, email, password, role);
                     statusLabel.setTextFill(Color.web("#68d391"));
                     statusLabel.setText("Account created! Please login.");
                     modeGroup.selectToggle(loginBtn);
                 } else {
-                    User user = authService.login(email, password);
+                    User user = authController.login(email, password);
                     statusLabel.setTextFill(Color.web("#68d391"));
                     statusLabel.setText("Welcome, " + user.getName() + "!");
                     dashboardView.show(stage, user);

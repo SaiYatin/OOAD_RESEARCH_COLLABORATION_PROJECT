@@ -1,5 +1,6 @@
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\pattern\PublishedOnlyDecorator.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\pattern\PaperSearchComponent.java
+E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\controller\PaperController.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\model\Visitor.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\pattern\RecommendationFacade.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\repository\ProjectMessageRepository.java
@@ -8,6 +9,7 @@ E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\v
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\repository\ExpertRepository.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\pattern\DomainFilterDecorator.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\repository\ResearcherRepository.java
+E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\controller\AuthController.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\model\ResearchProject.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\model\Reviewer.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\repository\ResearchPaperRepository.java
@@ -16,14 +18,16 @@ E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\p
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\config\AppConfig.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\service\ExpertService.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\model\ProjectMessage.java
-E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\model\UserSubclasses.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\pattern\PaperPublicationSubject.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\repository\CollaborationRequestRepository.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\model\Admin.java
+E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\controller\CollaborationController.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\view\collab\CollaborationView.java
+E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\controller\ExpertController.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\service\PaperService.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\view\paper\PaperSearchView.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\model\Collaborator.java
+E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\controller\AdminController.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\repository\ResearchProjectRepository.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\model\PublicOpinion.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\repository\ProjectUpdateRepository.java
@@ -38,7 +42,6 @@ E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\s
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\pattern\BasicPaperSearch.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\model\ProjectUpdate.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\view\admin\AdminView.java
-E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\pattern\CreationalPatterns.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\view\auth\LoginView.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\model\Researcher.java
 E:\clg\sem 6\ooad\mini project\impl\research-collab\src\main\java\com\research\service\RecommendationService.java

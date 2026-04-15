@@ -1,8 +1,7 @@
 package com.research.view.admin;
 
 import com.research.model.*;
-import com.research.repository.*;
-import com.research.service.ExpertService;
+import com.research.controller.AdminController;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -15,26 +14,22 @@ import java.util.List;
 
 /**
  * AdminView — Admin-only panel for managing users, experts, projects.
+ *
+ * @author Member 4
+ * @usecase Admin Dashboard & System Management
+ *
+ * Design Pattern demonstrated: Singleton (Spring-managed component)
+ * Design Principle: SRP (admin operations only)
+ *
+ * MVC Role: View — delegates all business logic to AdminController
  */
 @Component
 public class AdminView {
 
-    private final UserRepository userRepository;
-    private final ExpertRepository expertRepository;
-    private final ResearchProjectRepository projectRepository;
-    private final CollaborationRequestRepository requestRepository;
-    private final ExpertService expertService;
+    private final AdminController adminController;
 
-    public AdminView(UserRepository userRepository,
-                     ExpertRepository expertRepository,
-                     ResearchProjectRepository projectRepository,
-                     CollaborationRequestRepository requestRepository,
-                     ExpertService expertService) {
-        this.userRepository = userRepository;
-        this.expertRepository = expertRepository;
-        this.projectRepository = projectRepository;
-        this.requestRepository = requestRepository;
-        this.expertService = expertService;
+    public AdminView(AdminController adminController) {
+        this.adminController = adminController;
     }
 
     public VBox buildPanel() {
@@ -84,7 +79,7 @@ public class AdminView {
         heading.setFill(Color.web("#e2e8f0"));
         pane.getChildren().add(heading);
 
-        List<User> users = userRepository.findAll();
+        List<User> users = adminController.getAllUsers();
         if (users.isEmpty()) {
             pane.getChildren().add(emptyLabel("No users registered."));
         } else {
@@ -172,7 +167,7 @@ public class AdminView {
                 expert.setResearchAreas(areasField.getText().trim());
                 expert.setInstitution(instField.getText().trim());
                 expert.setActive(true);
-                expertService.saveExpert(expert);
+                adminController.saveExpert(expert);
                 status.setTextFill(Color.web("#68d391"));
                 status.setText("✓ Expert added successfully!");
                 nameField.clear(); emailField.clear(); domainField.clear();
@@ -186,13 +181,13 @@ public class AdminView {
         form.getChildren().addAll(formTitle, nameField, emailField, domainField, areasField, instField, addBtn, status);
 
         // Expert list
-        Text listTitle = new Text("All Experts (" + expertRepository.count() + ")");
+        Text listTitle = new Text("All Experts (" + adminController.getExpertCount() + ")");
         listTitle.setFont(Font.font("System", FontWeight.BOLD, 16));
         listTitle.setFill(Color.web("#e2e8f0"));
 
         pane.getChildren().addAll(heading, form, listTitle);
 
-        List<Expert> experts = expertService.getAllActiveExperts();
+        List<Expert> experts = adminController.getAllActiveExperts();
         for (Expert expert : experts) {
             HBox row = new HBox(12);
             row.setPadding(new Insets(8, 12, 8, 12));
@@ -228,7 +223,7 @@ public class AdminView {
         heading.setFill(Color.web("#e2e8f0"));
         pane.getChildren().add(heading);
 
-        List<ResearchProject> projects = projectRepository.findAll();
+        List<ResearchProject> projects = adminController.getAllProjects();
         if (projects.isEmpty()) {
             pane.getChildren().add(emptyLabel("No projects yet."));
         } else {
@@ -272,12 +267,12 @@ public class AdminView {
         heading.setFont(Font.font("Georgia", FontWeight.BOLD, 20));
         heading.setFill(Color.web("#e2e8f0"));
 
-        long userCount = userRepository.count();
-        long expertCount = expertRepository.count();
-        long projectCount = projectRepository.count();
-        long requestCount = requestRepository.count();
-        long activeProjects = projectRepository.findByStatus(ResearchProject.ProjectStatus.ACTIVE).size();
-        long openCollabs = projectRepository.findByLookingForCollaboratorsTrue().size();
+        long userCount = adminController.getUserCount();
+        long expertCount = adminController.getExpertCount();
+        long projectCount = adminController.getProjectCount();
+        long requestCount = adminController.getRequestCount();
+        long activeProjects = adminController.getActiveProjectCount();
+        long openCollabs = adminController.getOpenCollabCount();
 
         HBox statsGrid = new HBox(16);
         statsGrid.setAlignment(Pos.CENTER_LEFT);

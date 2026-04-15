@@ -1,11 +1,7 @@
 package com.research.view.collab;
 
 import com.research.model.*;
-import com.research.repository.ResearchPaperRepository;
-import com.research.repository.ResearchProjectRepository;
-import com.research.repository.UserRepository;
-import com.research.service.AuthService;
-import com.research.service.CollaborationService;
+import com.research.controller.CollaborationController;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -19,21 +15,26 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * CollaborationView — Reworked collaboration page.
+ * CollaborationView — View layer for Collaboration & Project Management.
+ *
+ * @author Member 3
+ * @usecase Collaboration Requests, Project Management & Team Communication
  *
  * Tabs:
  *   1. Inbox            — incoming requests (grouped by project)
  *   2. Sent             — sent requests with status
  *   3. Following        — interest-based research feed + domain selection
  *   4. Active Collabs   — browse open projects, toggle all/filtered by interests
+ *
+ * Design Pattern demonstrated: Observer (publication notifications via n8n)
+ * Design Principle: DIP (depends on controller abstraction, not concrete repositories)
+ *
+ * MVC Role: View — delegates all business logic to CollaborationController
  */
 @Component
 public class CollaborationView {
 
-    private final CollaborationService collaborationService;
-    private final ResearchProjectRepository projectRepository;
-    private final ResearchPaperRepository paperRepository;
-    private final UserRepository userRepository;
+    private final CollaborationController collaborationController;
 
     private static final String[] AVAILABLE_DOMAINS = {
         "Machine Learning", "Deep Learning", "Natural Language Processing",
@@ -43,14 +44,8 @@ public class CollaborationView {
         "Earthquake Engineering", "Mathematics", "Other"
     };
 
-    public CollaborationView(CollaborationService collaborationService,
-                             ResearchProjectRepository projectRepository,
-                             ResearchPaperRepository paperRepository,
-                             UserRepository userRepository) {
-        this.collaborationService = collaborationService;
-        this.projectRepository = projectRepository;
-        this.paperRepository = paperRepository;
-        this.userRepository = userRepository;
+    public CollaborationView(CollaborationController collaborationController) {
+        this.collaborationController = collaborationController;
     }
 
     public VBox buildPanel(User currentUser) {
@@ -62,8 +57,8 @@ public class CollaborationView {
 
         long pendingCount = 0;
         try {
-            pendingCount = collaborationService
-                .getPendingRequestsForUser(currentUser.getUserId()).size();
+            pendingCount = collaborationController
+                .getInboxRequests().size();
         } catch (Exception ignored) {}
 
         HBox titleRow = new HBox(12);
@@ -121,7 +116,7 @@ public class CollaborationView {
 
         List<CollaborationRequest> pending;
         try {
-            pending = collaborationService.getPendingRequestsForUser(user.getUserId());
+            pending = collaborationController.getInboxRequests();
         } catch (Exception e) {
             pane.getChildren().add(emptyLabel("Could not load requests: " + e.getMessage()));
             return pane;
@@ -166,14 +161,14 @@ public class CollaborationView {
 
                 acceptBtn.setOnAction(e -> {
                     try {
-                        collaborationService.acceptRequest(req.getRequestId());
+                        collaborationController.acceptRequest(req.getRequestId());
                         status(actionStatus, "✓ Accepted! Sender added to project.", true);
                         acceptBtn.setDisable(true); rejectBtn.setDisable(true);
                     } catch (Exception ex) { status(actionStatus, ex.getMessage(), false); }
                 });
                 rejectBtn.setOnAction(e -> {
                     try {
-                        collaborationService.rejectRequest(req.getRequestId());
+                        collaborationController.declineRequest(req.getRequestId());
                         status(actionStatus, "Request rejected.", false);
                         acceptBtn.setDisable(true); rejectBtn.setDisable(true);
                     } catch (Exception ex) { status(actionStatus, ex.getMessage(), false); }
@@ -196,7 +191,7 @@ public class CollaborationView {
             smallNote("Track the status of requests you've sent."));
 
         List<CollaborationRequest> sent;
-        try { sent = collaborationService.getSentRequests(user.getUserId()); }
+        try { sent = collaborationController.getSentRequests(); }
         catch (Exception e) { pane.getChildren().add(emptyLabel(e.getMessage())); return pane; }
 
         if (sent.isEmpty()) {
@@ -297,7 +292,7 @@ public class CollaborationView {
             }
 
             finalResearcher.setInterestedDomains(selected);
-            userRepository.save(finalResearcher);
+            collaborationController.saveUser(finalResearcher);
             status(saveStatus, "✓ Interests saved! Your feed is now personalized.", true);
         });
 
@@ -360,7 +355,7 @@ public class CollaborationView {
                     final String kwFinal = kw;
                     removeBtn.setOnAction(ev -> {
                         finalResearcher.getFollowedKeywords().remove(kwFinal);
-                        userRepository.save(finalResearcher);
+                        collaborationController.saveUser(finalResearcher);
                         refreshChips[0].run();
                     });
                     chip.getChildren().addAll(chipLbl, removeBtn);
@@ -375,7 +370,7 @@ public class CollaborationView {
             if (kw.isBlank() || finalResearcher == null) return;
             if (!finalResearcher.getFollowedKeywords().contains(kw)) {
                 finalResearcher.getFollowedKeywords().add(kw);
-                userRepository.save(finalResearcher);
+                collaborationController.saveUser(finalResearcher);
             }
             kwField.clear();
             status(addStatus, "✓ Following \"" + kw + "\"", true);
@@ -398,7 +393,7 @@ public class CollaborationView {
             List<ResearchPaper> matchingPapers = new ArrayList<>();
             try {
                 for (String domain : currentInterests) {
-                    matchingPapers.addAll(paperRepository.findByDomain(domain));
+                    matchingPapers.addAll(collaborationController.findPapersByDomain(domain));
                 }
             } catch (Exception ignored) {}
 
@@ -476,9 +471,9 @@ public class CollaborationView {
                         "Set your interests in the 'Following' tab first to filter projects."));
                     return;
                 }
-                projects = projectRepository.findByLookingForCollaboratorsTrueAndDomainIn(myDomains);
+                projects = collaborationController.getOpenProjectsByDomains(myDomains);
             } else {
-                projects = projectRepository.findByLookingForCollaboratorsTrue();
+                projects = collaborationController.getOpenProjects();
             }
 
             if (projects.isEmpty()) {
@@ -543,8 +538,7 @@ public class CollaborationView {
 
                 requestBtn.setOnAction(e -> {
                     try {
-                        collaborationService.sendRequest(
-                            currentUser.getUserId(),
+                        collaborationController.sendRequest(
                             project.getOwner().getUserId(),
                             project.getProjectId(),
                             "I'd like to join your project: " + project.getTopic()
@@ -654,5 +648,86 @@ public class CollaborationView {
 
     private void status(Label l, String msg, boolean ok) {
         l.setTextFill(Color.web(ok ? "#68d391" : "#fc8181")); l.setText(msg);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Visitor-only panel: browse active collaborations (read-only)
+    // ═══════════════════════════════════════════════════════════
+
+    public VBox buildVisitorPanel(javafx.stage.Stage stage) {
+        VBox panel = new VBox(0);
+        panel.setStyle("-fx-background-color: #0f1117;");
+
+        VBox header = new VBox(4);
+        header.setPadding(new Insets(0, 0, 16, 0));
+        Text title = new Text("Active Collaborations");
+        title.setFont(Font.font("Georgia", FontWeight.BOLD, 26));
+        title.setFill(Color.web("#e2e8f0"));
+        Text subtitle = new Text("Browse open research collaborations · Login to participate");
+        subtitle.setFont(Font.font("System", 13));
+        subtitle.setFill(Color.web("#8892a4"));
+        header.getChildren().addAll(title, subtitle);
+
+        VBox projectList = new VBox(12);
+
+        List<ResearchProject> projects = collaborationController.getOpenProjects();
+        if (projects.isEmpty()) {
+            projectList.getChildren().add(emptyLabel("No open collaboration opportunities right now."));
+        } else {
+            for (ResearchProject project : projects) {
+                VBox card = new VBox(8);
+                card.setPadding(new Insets(14, 18, 14, 18));
+                card.setMaxWidth(700);
+                card.setStyle("-fx-background-color:#1a1f2e;-fx-background-radius:10px;" +
+                              "-fx-border-color:#2d3748;-fx-border-radius:10px;");
+
+                HBox titleRow = new HBox(10);
+                titleRow.setAlignment(Pos.CENTER_LEFT);
+                Label topicLbl = new Label(project.getTopic());
+                topicLbl.setFont(Font.font("System", FontWeight.BOLD, 15));
+                topicLbl.setTextFill(Color.web("#e2e8f0"));
+
+                if (project.getDomain() != null) {
+                    Label domainBadge = new Label(project.getDomain());
+                    domainBadge.setStyle("-fx-background-color:#6c9bff22;-fx-text-fill:#6c9bff;" +
+                                         "-fx-padding:2 8;-fx-background-radius:8px;-fx-font-size:10px;");
+                    titleRow.getChildren().addAll(topicLbl, domainBadge);
+                } else {
+                    titleRow.getChildren().add(topicLbl);
+                }
+
+                String ownerName = project.getOwner() != null ? project.getOwner().getName() : "Unknown";
+                Label ownerLbl = new Label("👤 " + ownerName);
+                ownerLbl.setTextFill(Color.web("#8892a4"));
+                ownerLbl.setFont(Font.font("System", 12));
+
+                Label descLbl = new Label(project.getDescription() != null ? project.getDescription() : "No description.");
+                descLbl.setTextFill(Color.web("#a0aec0"));
+                descLbl.setFont(Font.font("System", 12));
+                descLbl.setWrapText(true);
+                descLbl.setMaxWidth(650);
+
+                Button requestBtn = new Button("🤝 Request to Join");
+                requestBtn.setStyle("-fx-background-color:#6c9bff;-fx-text-fill:white;-fx-font-weight:bold;" +
+                                    "-fx-background-radius:6px;-fx-cursor:hand;-fx-padding:6 16;");
+                requestBtn.setOnAction(e -> {
+                    com.research.view.dashboard.DashboardView dv =
+                        com.research.ResearchCollaborationApp.getSpringContext()
+                            .getBean(com.research.view.dashboard.DashboardView.class);
+                    dv.showLoginDialog(stage, false);
+                });
+
+                card.getChildren().addAll(titleRow, ownerLbl, descLbl, requestBtn);
+                projectList.getChildren().add(card);
+            }
+        }
+
+        ScrollPane scroll = new ScrollPane(projectList);
+        scroll.setFitToWidth(true);
+        scroll.setStyle("-fx-background-color:transparent;-fx-background:transparent;");
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+
+        panel.getChildren().addAll(header, scroll);
+        return panel;
     }
 }

@@ -1,9 +1,7 @@
 package com.research.view.reviewer;
 
 import com.research.model.ResearchPaper;
-import com.research.repository.ResearchPaperRepository;
-import com.research.service.AuthService;
-import com.research.model.User;
+import com.research.controller.PaperController;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -16,24 +14,31 @@ import javafx.scene.text.*;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * ReviewerDashboardView — Reviewer-specific dashboard.
+ *
+ * @author Member 1
+ * @usecase Paper Review & Publication Management
  *
  * Tabs:
  *   1. Pending Review   — Papers with status SUBMITTED
  *   2. Under Review     — Papers currently being reviewed
  *   3. Review History   — Published & Rejected papers
  *   4. Paper Search     — Search all papers (read-only view with View Paper)
+ *
+ * Design Pattern demonstrated: Decorator (search filter chain via PaperController)
+ * Design Principle: SRP (each tab one responsibility)
+ *
+ * MVC Role: View — delegates all business logic to PaperController
  */
 @Component
 public class ReviewerDashboardView {
 
-    private final ResearchPaperRepository paperRepository;
+    private final PaperController paperController;
 
-    public ReviewerDashboardView(ResearchPaperRepository paperRepository) {
-        this.paperRepository = paperRepository;
+    public ReviewerDashboardView(PaperController paperController) {
+        this.paperController = paperController;
     }
 
     public VBox buildPanel() {
@@ -46,7 +51,7 @@ public class ReviewerDashboardView {
         title.setFont(Font.font("Georgia", FontWeight.BOLD, 26));
         title.setFill(Color.web("#e2e8f0"));
 
-        long pendingCount = paperRepository.findByStatus(ResearchPaper.PaperStatus.SUBMITTED).size();
+        long pendingCount = paperController.getPapersByStatus(ResearchPaper.PaperStatus.SUBMITTED).size();
         HBox titleRow = new HBox(12);
         titleRow.setAlignment(Pos.CENTER_LEFT);
         titleRow.getChildren().add(title);
@@ -96,7 +101,7 @@ public class ReviewerDashboardView {
         Label desc = smallNote("These papers have been submitted by researchers and need your review.");
         pane.getChildren().addAll(heading, desc);
 
-        List<ResearchPaper> pending = paperRepository.findByStatus(ResearchPaper.PaperStatus.SUBMITTED);
+        List<ResearchPaper> pending = paperController.getPapersByStatus(ResearchPaper.PaperStatus.SUBMITTED);
 
         if (pending.isEmpty()) {
             pane.getChildren().add(emptyLabel("No papers waiting for review. All caught up! 🎉"));
@@ -124,7 +129,7 @@ public class ReviewerDashboardView {
         Label desc = smallNote("Papers you are currently reviewing. Provide feedback and make a decision.");
         pane.getChildren().addAll(heading, desc);
 
-        List<ResearchPaper> underReview = paperRepository.findByStatus(ResearchPaper.PaperStatus.UNDER_REVIEW);
+        List<ResearchPaper> underReview = paperController.getPapersByStatus(ResearchPaper.PaperStatus.UNDER_REVIEW);
 
         if (underReview.isEmpty()) {
             pane.getChildren().add(emptyLabel("No papers under review right now."));
@@ -152,8 +157,8 @@ public class ReviewerDashboardView {
         Label desc = smallNote("Papers that have been published or rejected.");
         pane.getChildren().addAll(heading, desc);
 
-        List<ResearchPaper> published = paperRepository.findByStatus(ResearchPaper.PaperStatus.PUBLISHED);
-        List<ResearchPaper> rejected = paperRepository.findByStatus(ResearchPaper.PaperStatus.REJECTED);
+        List<ResearchPaper> published = paperController.getPapersByStatus(ResearchPaper.PaperStatus.PUBLISHED);
+        List<ResearchPaper> rejected = paperController.getPapersByStatus(ResearchPaper.PaperStatus.REJECTED);
 
         if (published.isEmpty() && rejected.isEmpty()) {
             pane.getChildren().add(emptyLabel("No review history yet."));
@@ -239,15 +244,15 @@ public class ReviewerDashboardView {
             return row;
         });
 
-        ObservableList<ResearchPaper> data = FXCollections.observableArrayList(paperRepository.findAll());
+        ObservableList<ResearchPaper> data = FXCollections.observableArrayList(paperController.getAllPapers());
         table.setItems(data);
 
         Runnable doSearch = () -> {
             String q = searchField.getText().trim();
             if (q.isEmpty()) {
-                data.setAll(paperRepository.findAll());
+                data.setAll(paperController.getAllPapers());
             } else {
-                data.setAll(paperRepository.searchByQuery(q));
+                data.setAll(paperController.searchByQuery(q));
             }
         };
         searchBtn.setOnAction(e -> doSearch.run());
@@ -327,7 +332,7 @@ public class ReviewerDashboardView {
                                     "-fx-background-radius:6px;-fx-cursor:hand;-fx-padding:8 18;");
             startReviewBtn.setOnAction(e -> {
                 paper.setStatus(ResearchPaper.PaperStatus.UNDER_REVIEW);
-                paperRepository.save(paper);
+                paperController.savePaper(paper);
                 actionStatus.setTextFill(Color.web("#68d391"));
                 actionStatus.setText("✓ Moved to Under Review");
                 startReviewBtn.setDisable(true);
@@ -349,7 +354,7 @@ public class ReviewerDashboardView {
                                     "-fx-cursor:hand;-fx-padding:6 14;");
             saveFeedbackBtn.setOnAction(e -> {
                 paper.setReviewNotes(feedbackArea.getText().trim());
-                paperRepository.save(paper);
+                paperController.savePaper(paper);
                 actionStatus.setTextFill(Color.web("#68d391"));
                 actionStatus.setText("✓ Feedback saved");
             });
@@ -360,7 +365,7 @@ public class ReviewerDashboardView {
             approveBtn.setOnAction(e -> {
                 paper.setReviewNotes(feedbackArea.getText().trim());
                 paper.setStatus(ResearchPaper.PaperStatus.PUBLISHED);
-                paperRepository.save(paper);
+                paperController.savePaper(paper);
                 actionStatus.setTextFill(Color.web("#68d391"));
                 actionStatus.setText("✅ Paper approved and published!");
                 approveBtn.setDisable(true);
@@ -377,7 +382,7 @@ public class ReviewerDashboardView {
                 }
                 paper.setReviewNotes(feedbackArea.getText().trim());
                 paper.setStatus(ResearchPaper.PaperStatus.REJECTED);
-                paperRepository.save(paper);
+                paperController.savePaper(paper);
                 actionStatus.setTextFill(Color.web("#fc8181"));
                 actionStatus.setText("Paper rejected with feedback.");
                 rejectBtn.setDisable(true);

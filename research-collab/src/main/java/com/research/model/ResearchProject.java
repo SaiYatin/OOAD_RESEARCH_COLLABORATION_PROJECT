@@ -92,4 +92,64 @@ public class ResearchProject {
     public enum ProjectStatus {
         ACTIVE, COMPLETED, ARCHIVED
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // Builder Pattern (Creational) — constructs ResearchProject
+    // with many optional fields in a readable, fluent API.
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Builder for ResearchProject — Creational Design Pattern.
+     *
+     * Usage:
+     *   ResearchProject project = new ResearchProject.Builder("AI Research", owner)
+     *       .description("Deep learning for NLP")
+     *       .domain("Machine Learning")
+     *       .lookingForCollaborators(true)
+     *       .build();
+     */
+    public static class Builder {
+        private final String topic;
+        private final Researcher owner;
+        private String description;
+        private String domain;
+        private boolean lookingForCollaborators = false;
+        private ProjectStatus status = ProjectStatus.ACTIVE;
+
+        public Builder(String topic, Researcher owner) {
+            this.topic = topic;
+            this.owner = owner;
+        }
+
+        public Builder description(String description) {
+            this.description = description;
+            return this;
+        }
+
+        public Builder domain(String domain) {
+            this.domain = domain;
+            return this;
+        }
+
+        public Builder lookingForCollaborators(boolean lfc) {
+            this.lookingForCollaborators = lfc;
+            return this;
+        }
+
+        public Builder status(ProjectStatus status) {
+            this.status = status;
+            return this;
+        }
+
+        public ResearchProject build() {
+            ResearchProject project = new ResearchProject();
+            project.setTopic(this.topic);
+            project.setOwner(this.owner);
+            project.setDescription(this.description);
+            project.setDomain(this.domain);
+            project.setLookingForCollaborators(this.lookingForCollaborators);
+            project.setStatus(this.status);
+            return project;
+        }
+    }
 }

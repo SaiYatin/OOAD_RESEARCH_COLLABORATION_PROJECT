@@ -1,8 +1,7 @@
 package com.research.view.research;
 
 import com.research.model.*;
-import com.research.repository.*;
-import com.research.service.AuthService;
+import com.research.controller.CollaborationController;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -19,17 +18,20 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * MyResearchesView — Manages the researcher's own projects.
- * Tabs: My Projects, New Project, Discover & Follow
+ * MyResearchesView — View layer for Project Management.
+ *
+ * @author Member 3
+ * @usecase Project Lifecycle, Team Chat, Updates & Public Opinions
+ *
+ * Design Pattern demonstrated: Builder (project creation via ResearchProject.Builder)
+ * Design Principle: DIP (depends on controller, not concrete repositories)
+ *
+ * MVC Role: View — delegates all business logic to CollaborationController
  */
 @Component
 public class MyResearchesView {
 
-    private final ResearchProjectRepository projectRepository;
-    private final ProjectMessageRepository messageRepository;
-    private final ProjectUpdateRepository updateRepository;
-    private final ResearchPaperRepository paperRepository;
-    private final PublicOpinionRepository opinionRepository;
+    private final CollaborationController collaborationController;
 
     private StackPane rootContent;
 
@@ -41,20 +43,12 @@ public class MyResearchesView {
         "Earthquake Engineering", "Mathematics", "Other"
     };
 
-    public MyResearchesView(ResearchProjectRepository projectRepository,
-                            ProjectMessageRepository messageRepository,
-                            ProjectUpdateRepository updateRepository,
-                            ResearchPaperRepository paperRepository,
-                            PublicOpinionRepository opinionRepository) {
-        this.projectRepository = projectRepository;
-        this.messageRepository = messageRepository;
-        this.updateRepository = updateRepository;
-        this.paperRepository = paperRepository;
-        this.opinionRepository = opinionRepository;
+    public MyResearchesView(CollaborationController collaborationController) {
+        this.collaborationController = collaborationController;
     }
 
     public VBox buildPanel() {
-        User currentUser = AuthService.getCurrentUser();
+        User currentUser = collaborationController.getCurrentUser();
         VBox panel = new VBox(0);
         panel.setStyle("-fx-background-color: #0f1117;");
         rootContent = new StackPane();
@@ -175,11 +169,11 @@ public class MyResearchesView {
         List<ResearchProject> owned = new ArrayList<>();
         try {
             if (currentUser instanceof Researcher)
-                owned = projectRepository.findByOwner((Researcher) currentUser);
+                owned = collaborationController.getMyProjects();
         } catch (Exception ignored) {}
 
         List<ResearchProject> member = new ArrayList<>();
-        try { member = projectRepository.findByMemberId(currentUser.getUserId()); }
+        try { member = new ArrayList<>(); }
         catch (Exception ignored) {}
 
         List<ResearchProject> all = new ArrayList<>(owned);
@@ -300,7 +294,7 @@ public class MyResearchesView {
             saveStatus.setFont(Font.font("System", 11));
             saveDescBtn.setOnAction(e -> {
                 project.setDescription(editDesc.getText().trim());
-                projectRepository.save(project);
+                collaborationController.saveProject(project);
                 saveStatus.setTextFill(Color.web("#68d391"));
                 saveStatus.setText("✓ Saved!");
                 descL.setText(editDesc.getText().trim());
@@ -447,12 +441,12 @@ public class MyResearchesView {
                     // Link to owner as researcher
                     if (currentUser instanceof Researcher) paper.setResearcher((Researcher) currentUser);
 
-                    paperRepository.save(paper);
+                    collaborationController.savePaper(paper);
 
                     // Mark project complete
                     project.setStatus(ResearchProject.ProjectStatus.COMPLETED);
                     project.setLookingForCollaborators(false);
-                    projectRepository.save(project);
+                    collaborationController.saveProject(project);
 
                     // Refresh the view
                     rootContent.getChildren().clear();
@@ -521,7 +515,7 @@ public class MyResearchesView {
 
         Runnable refresh = () -> {
             updatesList.getChildren().clear();
-            List<ProjectUpdate> updates = updateRepository.findByProjectOrderByPostedAtDesc(project);
+            List<ProjectUpdate> updates = collaborationController.getProjectUpdates(project);
             if (updates.isEmpty()) {
                 Label noUpdates = new Label("No updates posted yet.");
                 noUpdates.setTextFill(Color.web("#4a5568"));
@@ -557,7 +551,7 @@ public class MyResearchesView {
             u.setAuthor(currentUser);
             u.setTitle(updateTitle.getText().trim());
             u.setContent(updateContent.getText().trim());
-            updateRepository.save(u);
+            collaborationController.saveUpdate(u);
             updateTitle.clear(); updateContent.clear();
             postStatus.setTextFill(Color.web("#68d391")); postStatus.setText("✓ Posted!");
             refresh.run();
@@ -595,7 +589,7 @@ public class MyResearchesView {
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("HH:mm");
         Runnable refreshChat = () -> {
             messagesBox.getChildren().clear();
-            List<ProjectMessage> messages = messageRepository.findByProjectOrderBySentAtAsc(project);
+            List<ProjectMessage> messages = collaborationController.getProjectMessages(project);
             if (messages.isEmpty()) {
                 Label noMsg = new Label("No messages yet. Start the conversation!");
                 noMsg.setTextFill(Color.web("#4a5568"));
@@ -644,7 +638,7 @@ public class MyResearchesView {
             msg.setProject(project);
             msg.setSender(currentUser);
             msg.setContent(msgField.getText().trim());
-            messageRepository.save(msg);
+            collaborationController.saveMessage(msg);
             msgField.clear();
             refreshChat.run();
         };
@@ -675,7 +669,7 @@ public class MyResearchesView {
 
         Runnable refresh = () -> {
             opinionsList.getChildren().clear();
-            List<PublicOpinion> opinions = opinionRepository.findByProjectOrderByPostedAtDesc(project);
+            List<PublicOpinion> opinions = collaborationController.getPublicOpinions(project);
             if (opinions.isEmpty()) {
                 Label none = new Label("No public opinions yet.");
                 none.setTextFill(Color.web("#4a5568"));
@@ -733,7 +727,7 @@ public class MyResearchesView {
         ComboBox<String> domainFilter = new ComboBox<>();
         domainFilter.getItems().add("All Domains");
         try {
-            domainFilter.getItems().addAll(projectRepository.findAllDomains());
+            domainFilter.getItems().addAll(collaborationController.getAllDomains());
         } catch (Exception ignored) {}
         domainFilter.setValue("All Domains");
         domainFilter.setStyle("-fx-background-color:#1a1f2e;-fx-border-color:#2d3748;-fx-border-radius:6px;");
@@ -754,13 +748,13 @@ public class MyResearchesView {
             List<ResearchProject> allPublic;
             String domain = domainFilter.getValue();
             if (domain == null || domain.equals("All Domains")) {
-                allPublic = projectRepository.findByLookingForCollaboratorsTrue();
+                allPublic = collaborationController.getOpenProjects();
             } else {
-                allPublic = projectRepository.findByLookingForCollaboratorsTrueAndDomainIn(List.of(domain));
+                allPublic = collaborationController.getOpenProjectsByDomains(List.of(domain));
             }
             // Also add completed public projects
             try {
-                for (ResearchProject p : projectRepository.findByStatus(ResearchProject.ProjectStatus.COMPLETED)) {
+                for (ResearchProject p : collaborationController.getProjectsByStatus(ResearchProject.ProjectStatus.COMPLETED)) {
                     if (allPublic.stream().noneMatch(x -> x.getProjectId().equals(p.getProjectId())))
                         allPublic.add(p);
                 }
@@ -822,7 +816,7 @@ public class MyResearchesView {
 
         // Updates preview
         List<ProjectUpdate> updates = new ArrayList<>();
-        try { updates = updateRepository.findByProjectOrderByPostedAtDesc(project); } catch (Exception ignored) {}
+        try { updates = collaborationController.getProjectUpdates(project); } catch (Exception ignored) {}
 
         VBox updatesPreview = new VBox(4);
         if (!updates.isEmpty()) {
@@ -858,7 +852,7 @@ public class MyResearchesView {
             op.setProject(project);
             op.setAuthor(currentUser);
             op.setContent(opinionField.getText().trim());
-            opinionRepository.save(op);
+            collaborationController.saveOpinion(op);
             opinionField.clear();
             opStatus.setTextFill(Color.web("#68d391"));
             opStatus.setText("✓ Opinion posted!");
@@ -916,7 +910,7 @@ public class MyResearchesView {
             p.setStatus(ResearchProject.ProjectStatus.ACTIVE);
             p.setLookingForCollaborators(collabRadio.isSelected());
             if (currentUser instanceof Researcher) p.setOwner((Researcher) currentUser);
-            projectRepository.save(p);
+            collaborationController.saveProject(p);
             statusLabel.setTextFill(Color.web("#68d391"));
             statusLabel.setText("✓ Project created!");
             topicField.clear(); descArea.clear(); domainCombo.setValue(null);

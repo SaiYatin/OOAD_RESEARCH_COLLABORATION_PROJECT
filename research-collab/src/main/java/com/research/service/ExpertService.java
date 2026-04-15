@@ -76,6 +76,40 @@ public class ExpertService {
         expertRepository.save(expert);
     }
 
+    /** Get ALL experts (active and inactive) for admin/browse views. */
+    public List<Expert> getAllExperts() {
+        return expertRepository.findAll();
+    }
+
+    /** Search experts by keyword in research areas. */
+    public List<Expert> searchExperts(String keyword) {
+        return expertRepository.findByResearchAreasContaining(keyword);
+    }
+
+    /** Toggle expert active/inactive status. */
+    @Transactional
+    public Expert toggleActive(Long expertId) {
+        Expert expert = getExpertById(expertId);
+        expert.setActive(!expert.isActive());
+        return expertRepository.save(expert);
+    }
+
+    /** Add a new expert manually (from form input). */
+    @Transactional
+    public Expert addExpert(String name, String designation, String email,
+                            String phone, String institution, String researchAreas) {
+        Expert expert = expertRepository.findByEmail(email).orElse(new Expert());
+        expert.setName(name);
+        expert.setDesignation(designation);
+        expert.setEmail(email);
+        expert.setPhone(phone);
+        expert.setInstitution(institution != null && !institution.isBlank() ? institution : "PES University");
+        expert.updateProfile(researchAreas);
+        expert.setActive(true);
+        expert.setDomain(inferDomain(researchAreas));
+        return expertRepository.save(expert);
+    }
+
     public List<Expert> searchByKeyword(String keyword) {
         return expertRepository.findByResearchAreasContaining(keyword);
     }
