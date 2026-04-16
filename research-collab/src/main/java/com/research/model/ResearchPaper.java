@@ -41,6 +41,10 @@ public class ResearchPaper {
     @JoinColumn(name = "researcher_id")
     private Researcher researcher;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reviewer_id")
+    private User assignedReviewer;
+
     @Column(updatable = false)
     private LocalDateTime uploadedAt;
 
@@ -71,6 +75,7 @@ public class ResearchPaper {
     public PaperStatus getStatus() { return status; }
     public String getReviewNotes() { return reviewNotes; }
     public Researcher getResearcher() { return researcher; }
+    public User getAssignedReviewer() { return assignedReviewer; }
     public LocalDateTime getUploadedAt() { return uploadedAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public List<CollaborationRequest> getCollaborationRequests() { return collaborationRequests; }
@@ -86,6 +91,7 @@ public class ResearchPaper {
     public void setStatus(PaperStatus status) { this.status = status; }
     public void setReviewNotes(String reviewNotes) { this.reviewNotes = reviewNotes; }
     public void setResearcher(Researcher researcher) { this.researcher = researcher; }
+    public void setAssignedReviewer(User reviewer) { this.assignedReviewer = reviewer; }
 
     // ── Business methods ─────────────────────────────────────
     public String getDetails() {

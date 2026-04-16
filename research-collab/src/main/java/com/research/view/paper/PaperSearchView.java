@@ -188,18 +188,44 @@ public class PaperSearchView {
         abstractArea.setWrapText(true);
         abstractArea.setStyle(fieldStyle() + "-fx-pref-height:90px;");
 
-        Button saveBtn   = primaryBtn("Save as Draft");
-        Button submitBtn = new Button("Submit for Review");
-        submitBtn.setStyle(secondaryBtnStyle());
-        submitBtn.setDisable(true);
-        HBox btnRow = new HBox(12, saveBtn, submitBtn);
+        Button submitBtn = primaryBtn("Upload & Submit for Review");
+        Button saveBtn   = new Button("Save as Draft");
+        saveBtn.setStyle(secondaryBtnStyle());
+        HBox btnRow = new HBox(12, submitBtn, saveBtn);
 
         Label statusLbl = new Label("");
         statusLbl.setWrapText(true);
         statusLbl.setFont(Font.font("System", 12));
 
-        final Long[] lastId = {null};
+        // Upload & Submit (primary) — paper goes straight to SUBMITTED → appears in reviewer Pending
+        submitBtn.setOnAction(e -> {
+            String t = titleField.getText().trim();
+            String a = authorField.getText().trim();
+            if (t.isBlank() || a.isBlank()) {
+                status(statusLbl, "Title and Author are required.", false);
+                return;
+            }
+            User cu = paperController.getCurrentUser();
+            if (!(cu instanceof Researcher researcher)) {
+                status(statusLbl, "Only Researcher accounts can upload papers.", false);
+                return;
+            }
+            ResearchPaper p = new ResearchPaper();
+            p.setTitle(t);
+            p.setAuthor(a);
+            p.setDomain(domainField.getText().trim());
+            p.setKeywords(keywordsField.getText().trim());
+            p.setLink(linkField.getText().trim());
+            p.setAbstractText(abstractArea.getText().trim());
 
+            ResearchPaper saved = paperController.uploadPaper(p);
+            paperController.submitForReview(saved.getPaperId());
+            status(statusLbl, "✓ Paper uploaded & submitted for review! (ID " + saved.getPaperId()
+                   + ") — It will now appear in all Reviewers' Pending tab.", true);
+            submitBtn.setDisable(true);
+        });
+
+        // Save as Draft (secondary) — paper stays as DRAFT, not visible to reviewers
         saveBtn.setOnAction(e -> {
             String t = titleField.getText().trim();
             String a = authorField.getText().trim();
@@ -221,21 +247,8 @@ public class PaperSearchView {
             p.setAbstractText(abstractArea.getText().trim());
 
             ResearchPaper saved = paperController.uploadPaper(p);
-            lastId[0] = saved.getPaperId();
             status(statusLbl, "✓ Saved as DRAFT (ID " + saved.getPaperId()
-                   + "). Now submit it for review.", true);
-            submitBtn.setDisable(false);
-        });
-
-        submitBtn.setOnAction(e -> {
-            if (lastId[0] == null) { status(statusLbl, "Save paper first.", false); return; }
-            try {
-                paperController.submitForReview(lastId[0]);
-                status(statusLbl, "✓ Submitted for review! Status: SUBMITTED.", true);
-                submitBtn.setDisable(true);
-            } catch (Exception ex) {
-                status(statusLbl, ex.getMessage(), false);
-            }
+                   + "). You can submit it later from My Papers tab.", true);
         });
 
         Label note = new Label(
@@ -408,11 +421,11 @@ public class PaperSearchView {
                 try {
                     java.io.File file = new java.io.File(link);
                     if (file.exists()) {
-                        java.awt.Desktop.getDesktop().open(file);
+                        new ProcessBuilder("cmd", "/c", "start", "", file.getAbsolutePath()).start();
                         viewStatus.setTextFill(Color.web("#68d391"));
                         viewStatus.setText("✓ Opened in default viewer");
                     } else if (link.startsWith("http")) {
-                        java.awt.Desktop.getDesktop().browse(new java.net.URI(link));
+                        new ProcessBuilder("cmd", "/c", "start", link).start();
                         viewStatus.setTextFill(Color.web("#68d391"));
                         viewStatus.setText("✓ Opened in browser");
                     } else {
@@ -421,7 +434,7 @@ public class PaperSearchView {
                     }
                 } catch (Exception ex) {
                     viewStatus.setTextFill(Color.web("#fc8181"));
-                    viewStatus.setText("Error: " + ex.getMessage());
+                    viewStatus.setText("Error: " + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName()));
                 }
             });
             HBox viewRow = new HBox(10, viewBtn, viewStatus);

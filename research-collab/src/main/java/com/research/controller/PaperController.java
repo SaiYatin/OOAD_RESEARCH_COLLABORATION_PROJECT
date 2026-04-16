@@ -116,4 +116,21 @@ public class PaperController {
     public com.research.model.User getCurrentUser() {
         return AuthService.getCurrentUser();
     }
+
+    /**
+     * Start reviewing a paper — assigns the current reviewer and changes status.
+     * Removes the paper from all other reviewers' Pending tab.
+     */
+    public ResearchPaper startReview(ResearchPaper paper) {
+        paper.setStatus(ResearchPaper.PaperStatus.UNDER_REVIEW);
+        paper.setAssignedReviewer(AuthService.getCurrentUser());
+        return paperRepository.save(paper);
+    }
+
+    /** Get papers currently under review BY the current reviewer only. */
+    public List<ResearchPaper> getMyUnderReview() {
+        com.research.model.User currentUser = AuthService.getCurrentUser();
+        return paperRepository.findByAssignedReviewerAndStatus(
+                currentUser, ResearchPaper.PaperStatus.UNDER_REVIEW);
+    }
 }

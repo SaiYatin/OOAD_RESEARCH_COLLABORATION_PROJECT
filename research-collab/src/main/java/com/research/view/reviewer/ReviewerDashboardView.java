@@ -129,7 +129,7 @@ public class ReviewerDashboardView {
         Label desc = smallNote("Papers you are currently reviewing. Provide feedback and make a decision.");
         pane.getChildren().addAll(heading, desc);
 
-        List<ResearchPaper> underReview = paperController.getPapersByStatus(ResearchPaper.PaperStatus.UNDER_REVIEW);
+        List<ResearchPaper> underReview = paperController.getMyUnderReview();
 
         if (underReview.isEmpty()) {
             pane.getChildren().add(emptyLabel("No papers under review right now."));
@@ -331,10 +331,9 @@ public class ReviewerDashboardView {
             startReviewBtn.setStyle("-fx-background-color:#6c9bff;-fx-text-fill:white;-fx-font-weight:bold;" +
                                     "-fx-background-radius:6px;-fx-cursor:hand;-fx-padding:8 18;");
             startReviewBtn.setOnAction(e -> {
-                paper.setStatus(ResearchPaper.PaperStatus.UNDER_REVIEW);
-                paperController.savePaper(paper);
+                paperController.startReview(paper);
                 actionStatus.setTextFill(Color.web("#68d391"));
-                actionStatus.setText("✓ Moved to Under Review");
+                actionStatus.setText("✓ Assigned to you — moved to Under Review");
                 startReviewBtn.setDisable(true);
                 startReviewBtn.setText("Reviewing...");
             });
@@ -498,20 +497,20 @@ public class ReviewerDashboardView {
                 try {
                     java.io.File file = new java.io.File(link);
                     if (file.exists()) {
-                        java.awt.Desktop.getDesktop().open(file);
+                        new ProcessBuilder("cmd", "/c", "start", "", file.getAbsolutePath()).start();
                         viewStatus.setTextFill(Color.web("#68d391"));
                         viewStatus.setText("✓ Opened");
                     } else if (link.startsWith("http")) {
-                        java.awt.Desktop.getDesktop().browse(new java.net.URI(link));
+                        new ProcessBuilder("cmd", "/c", "start", link).start();
                         viewStatus.setTextFill(Color.web("#68d391"));
                         viewStatus.setText("✓ Opened in browser");
                     } else {
                         viewStatus.setTextFill(Color.web("#fc8181"));
-                        viewStatus.setText("File not found");
+                        viewStatus.setText("File not found: " + link);
                     }
                 } catch (Exception ex) {
                     viewStatus.setTextFill(Color.web("#fc8181"));
-                    viewStatus.setText("Error: " + ex.getMessage());
+                    viewStatus.setText("Error: " + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName()));
                 }
             });
             content.getChildren().add(new HBox(10, viewBtn, viewStatus));

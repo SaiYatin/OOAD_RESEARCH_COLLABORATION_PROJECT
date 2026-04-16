@@ -20,6 +20,10 @@ public interface ResearchPaperRepository extends JpaRepository<ResearchPaper, Lo
 
     List<ResearchPaper> findByResearcher(Researcher researcher);
 
+    List<ResearchPaper> findByAssignedReviewer(com.research.model.User reviewer);
+
+    List<ResearchPaper> findByAssignedReviewerAndStatus(com.research.model.User reviewer, ResearchPaper.PaperStatus status);
+
     List<ResearchPaper> findByDomain(String domain);
 
     @Query("SELECT p FROM ResearchPaper p WHERE p.status = 'PUBLISHED' " +
